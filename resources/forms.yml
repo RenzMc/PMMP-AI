@@ -1,0 +1,255 @@
+# Forms Configuration
+# This file contains all customization options for the AI Assistant forms
+
+# General Form Settings
+general:
+  # Default button colors
+  button_colors:
+    primary: "&a"
+    secondary: "&b"
+    danger: "&c"
+    warning: "&e"
+    info: "&9"
+    success: "&2"
+    neutral: "&7"
+    highlight: "&d"
+    special: "&6"
+  
+  # Default text formatting
+  text_formatting:
+    title: "&l&b"
+    subtitle: "&l&e"
+    heading: "&l&6"
+    content: "&7"
+    highlight: "&e"
+    error: "&c"
+    success: "&a"
+    info: "&b"
+
+# Main Form
+main_form:
+  title: "AI Assistant"
+  content: "Welcome to the AI Assistant! What would you like to do?"
+  buttons:
+    chat:
+      text: "Chat with AI"
+      color: "{primary}"
+      texture: "textures/ui/chat_icon"
+    history:
+      text: "View Chat History"
+      color: "{highlight}"
+      texture: "textures/ui/history_icon"
+    crafting:
+      text: "Crafting Helper"
+      color: "{special}"
+      texture: "textures/ui/crafting_icon"
+    building:
+      text: "Building Calculator"
+      color: "{warning}"
+      texture: "textures/ui/building_icon"
+    token_shop:
+      text: "Token Shop"
+      color: "{special}"
+      texture: "textures/ui/token_icon"
+    server_info:
+      text: "Server Info"
+      color: "{info}"
+      texture: "textures/ui/info_icon"
+    settings:
+      text: "Settings"
+      color: "{danger}"
+      texture: "textures/ui/settings_icon"
+
+# Chat Form
+chat_form:
+  title: "Chat with AI"
+  content: "What would you like to ask the AI Assistant?"
+  placeholder: "Type your question here..."
+  buttons:
+    submit:
+      text: "Submit"
+      color: "{success}"
+      texture: "textures/ui/check"
+    cancel:
+      text: "Cancel"
+      color: "{danger}"
+      texture: "textures/ui/cancel"
+
+# Response Form
+response_form:
+  title: "AI Response"
+  question_prefix: "Question: "
+  response_prefix: "Response: "
+  buttons:
+    back:
+      text: "Back to Main Menu"
+      color: "{info}"
+      texture: "textures/ui/arrow_left"
+    new_question:
+      text: "Ask Another Question"
+      color: "{primary}"
+      texture: "textures/ui/chat_icon"
+
+# History Form
+history_form:
+  title: "Chat History"
+  content: "Your previous conversations with the AI Assistant:"
+  empty_message: "You don't have any chat history yet."
+  buttons:
+    view:
+      text: "View"
+      color: "{primary}"
+      texture: "textures/ui/check"
+    delete:
+      text: "Delete"
+      color: "{danger}"
+      texture: "textures/ui/trash"
+    back:
+      text: "Back"
+      color: "{neutral}"
+      texture: "textures/ui/arrow_left"
+
+# Building Calculator Form
+building_calculator_form:
+  title: "Building Calculator"
+  content: "Calculate materials needed for your building project:"
+  buttons:
+    calculate:
+      text: "Calculate"
+      color: "{primary}"
+      texture: "textures/ui/check"
+    cancel:
+      text: "Cancel"
+      color: "{danger}"
+      texture: "textures/ui/cancel"
+  fields:
+    length:
+      label: "Length"
+      placeholder: "10"
+      default: "10"
+    width:
+      label: "Width"
+      placeholder: "10"
+      default: "10"
+    height:
+      label: "Height"
+      placeholder: "5"
+      default: "5"
+    style:
+      label: "Building Style"
+      options:
+        - "Modern"
+        - "Medieval"
+        - "Futuristic"
+        - "Rustic"
+        - "Industrial"
+
+# Crafting Form
+crafting_form:
+  title: "Crafting Helper"
+  content: "Enter the name of the item you want to craft:"
+  placeholder: "Diamond Pickaxe"
+  buttons:
+    search:
+      text: "Search"
+      color: "{primary}"
+      texture: "textures/ui/check"
+    cancel:
+      text: "Cancel"
+      color: "{danger}"
+      texture: "textures/ui/cancel"
+
+# Server Info Form
+server_info_form:
+  title: "Server Information"
+  content: "Information about the server:"
+  buttons:
+    back:
+      text: "Back"
+      color: "{neutral}"
+      texture: "textures/ui/arrow_left"
+  sections:
+    general:
+      title: "General Information"
+    players:
+      title: "Player Information"
+    performance:
+      title: "Server Performance"
+    rules:
+      title: "Server Rules"
+
+# Token Shop Form
+token_shop_form:
+  title: "Token Shop"
+  content: "Purchase AI tokens to use the AI Assistant:"
+  buttons:
+    buy:
+      text: "Buy"
+      color: "{success}"
+      texture: "textures/ui/check"
+    cancel:
+      text: "Cancel"
+      color: "{danger}"
+      texture: "textures/ui/cancel"
+    back:
+      text: "Back"
+      color: "{neutral}"
+      texture: "textures/ui/arrow_left"
+
+# Settings Form Configuration
+settings_form:
+  title: "AI Assistant Settings"
+  content: "Configure the AI Assistant settings:"
+  
+  buttons:
+    back:
+      text: "Back"
+      color: "&7"
+      texture: "textures/ui/arrow_left"
+  
+  sections:
+    general:
+      title: "General Settings"
+      texture: "textures/ui/settings_glyph_color_2x"
+    
+    ai_provider:
+      title: "AI Provider Settings"
+      texture: "textures/ui/automation_glyph_color"
+    
+    message:
+      title: "Message Settings"
+      texture: "textures/ui/chat_glyph_color"
+    
+    server_info:
+      title: "Server Info Settings"
+      texture: "textures/ui/world_glyph_color"
+    
+    advanced:
+      title: "Advanced Settings"
+      texture: "textures/ui/dev_glyph_color"
+  
+  textures:
+    token_settings: "textures/items/gold_nugget"
+    history_settings: "textures/ui/book_edit_default"
+    provider_api_keys: "textures/ui/lock"
+    server_features_settings: "textures/ui/servers"
+    forms_settings: "textures/ui/feedback"
+    back_button: "textures/ui/arrow_left"
+    general_ai_settings: "textures/ui/settings_glyph_color_2x"
+    openai_settings: "textures/ui/automation_glyph_color"
+    openrouter_settings: "textures/ui/world_glyph_color"
+    anthropic_settings: "textures/ui/creator_glyph_color"
+    google_settings: "textures/ui/search_glyph_color"
+    local_settings: "textures/ui/dev_glyph_color"
+    feature_button: "textures/ui/icon_book"
+    add_button: "textures/ui/plus"
+    delete_button: "textures/ui/trash"
+    cancel_button: "textures/ui/cancel"
+  
+  category_textures:
+    economy: "textures/ui/MCoin"
+    protection: "textures/ui/World"
+    teleportation: "textures/ui/ender_pearl"
+    enchantments: "textures/ui/enchanting_table"
+    minigames: "textures/ui/dressing_room_skins"
+    misc: "textures/ui/settings_glyph_color_2x"

@@ -1,0 +1,105 @@
+# Server Features Configuration
+# This file contains information about server features that the AI Assistant can use to help players
+
+# Economy Features
+economy:
+  money:
+    description: "The server uses a money-based economy system where players can earn and spend money."
+    tutorial: "You can earn money by mining resources, completing quests, and selling items to other players."
+    commands:
+      "/money": "Check your current balance"
+      "/pay <player> <amount>": "Send money to another player"
+      "/shop": "Open the server shop to buy and sell items"
+
+  jobs:
+    description: "Players can join different jobs to earn money by performing specific actions."
+    tutorial: "Join a job using /jobs join <job>. Each job pays for different activities like mining, farming, or fishing."
+    commands:
+      "/jobs browse": "View available jobs"
+      "/jobs join <job>": "Join a specific job"
+      "/jobs stats": "View your job statistics"
+      "/jobs leave <job>": "Leave a job"
+
+# Land Protection
+protection:
+  land_claims:
+    description: "Players can claim land to protect their builds from griefing."
+    tutorial: "Use a golden shovel to select two corners of the area you want to claim, then use /claim to protect that area."
+    commands:
+      "/claim": "Claim the selected area"
+      "/unclaim": "Remove a claim"
+      "/trust <player>": "Allow another player to build in your claim"
+      "/untrust <player>": "Remove a player's building permissions in your claim"
+      "/claimlist": "List all your claims"
+
+  town_system:
+    description: "Players can create and join towns with shared protection and permissions."
+    tutorial: "Create a town with /town create <name>, then invite players with /town invite <player>."
+    commands:
+      "/town create <name>": "Create a new town"
+      "/town invite <player>": "Invite a player to your town"
+      "/town join <town>": "Join a town you've been invited to"
+      "/town leave": "Leave your current town"
+      "/town info": "View information about your town"
+
+# Teleportation
+teleportation:
+  homes:
+    description: "Players can set multiple home locations to teleport to."
+    tutorial: "Set a home at your current location with /sethome <name>, then teleport to it with /home <name>."
+    commands:
+      "/sethome <name>": "Set a home at your current location"
+      "/home <name>": "Teleport to a home"
+      "/delhome <name>": "Delete a home"
+      "/listhomes": "List all your homes"
+
+  warps:
+    description: "Public teleport locations that all players can use."
+    tutorial: "Use /warp <name> to teleport to a public warp location."
+    commands:
+      "/warp <name>": "Teleport to a warp location"
+      "/warps": "List all available warps"
+
+# Custom Enchantments
+enchantments:
+  custom_enchants:
+    description: "The server has special enchantments beyond vanilla Minecraft."
+    tutorial: "You can get custom enchantments from the enchanter NPC at spawn or from special events."
+    commands:
+      "/ce list": "List all custom enchantments"
+      "/ce info <enchant>": "Get information about a specific enchantment"
+
+# Minigames
+minigames:
+  survival_games:
+    description: "A PvP minigame where players fight to be the last one standing."
+    tutorial: "Join the game with /sg join, collect weapons and armor, and eliminate other players."
+    commands:
+      "/sg join": "Join a Survival Games match"
+      "/sg leave": "Leave the current match"
+      "/sg stats": "View your Survival Games statistics"
+
+  skyblock:
+    description: "Start with a small island and expand it by completing challenges."
+    tutorial: "Create your island with /is create, then complete challenges to earn rewards and expand."
+    commands:
+      "/is create": "Create a new skyblock island"
+      "/is home": "Teleport to your island"
+      "/is challenges": "View available challenges"
+      "/is invite <player>": "Invite a player to your island"
+
+# Miscellaneous
+misc:
+  voting:
+    description: "Vote for the server on voting sites to earn rewards."
+    tutorial: "Use /vote to see the list of voting sites, vote on each site, and claim your rewards."
+    commands:
+      "/vote": "View voting sites"
+      "/rewards": "Claim voting rewards"
+
+  ranks:
+    description: "The server has different player ranks with unique permissions and features."
+    tutorial: "You can purchase ranks from the server store or earn them through playtime and achievements."
+    commands:
+      "/ranks": "View available ranks and their benefits"
+      "/rankup": "Upgrade to the next rank if eligible"
