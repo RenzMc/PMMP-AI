@@ -93,8 +93,6 @@ class HttpRequestTask {
     }
 
     public function execute(): void {
-        $serverLogger = Server::getInstance()->getLogger();
-
         // Normalize and trim headers
         $extraHeaders = $this->normalizeHeaders($this->headers);
 
@@ -179,17 +177,6 @@ class HttpRequestTask {
             }
         }
 
-        // Log summary (mask Authorization)
-        $masked = $this->maskHeadersForLog($extraHeaders);
-        $serverLogger->info("[HttpRequestTask] Preparing request:");
-        $serverLogger->info("[HttpRequestTask] URL: " . $this->url);
-        $serverLogger->info("[HttpRequestTask] Method: " . $this->requestMethod . " Timeout: " . $this->timeout);
-        $serverLogger->info("[HttpRequestTask] Headers: " . json_encode($masked));
-        $bodySample = $this->requestBody === "" ? "<empty>" : (strlen($this->requestBody) > 1000 ? substr($this->requestBody, 0, 1000) . '... (truncated)' : $this->requestBody);
-        // to avoid logging sensitive content in body, only log first 1000 chars
-        $serverLogger->info("[HttpRequestTask] Body length: " . strlen($this->requestBody) . " Body sample: " . (is_string($bodySample) ? substr($bodySample, 0, 500) : '<non-string>'));
-        $serverLogger->info("[HttpRequestTask] CAINFO: " . ($this->cainfo_path !== "" ? $this->cainfo_path : '<none>'));
-
         // Create the BulkCurlTaskOperation (PocketMine compatible)
         $operation = new BulkCurlTaskOperation(
             page: $this->url,
@@ -206,10 +193,8 @@ class HttpRequestTask {
 
         try {
             Server::getInstance()->getAsyncPool()->submitTask($bulkTask);
-            $serverLogger->info("[HttpRequestTask] Submitted BulkCurlTask for URL: " . $this->url);
         } catch (\Throwable $t) {
             // If submit fails, immediately trigger callback with error
-            $serverLogger->error("[HttpRequestTask] Failed to submit BulkCurlTask: " . $t->getMessage());
             $this->triggerCallback([
                 'requestId' => $this->requestId,
                 'error' => 'Failed to submit BulkCurlTask: ' . $t->getMessage(),
@@ -232,22 +217,9 @@ class HttpRequestTask {
      * @param array $results
      */
     private function handleCompletion(array $results): void {
-        $serverLogger = Server::getInstance()->getLogger();
-
         $result = $results[0] ?? null;
 
-        // Log raw result for debugging (but mask any Authorization if present)
-        $safeResults = $results;
-        // try to remove Authorization from any nested headers before logging
-        array_walk_recursive($safeResults, function (&$v, $k) {
-            if (is_string($v) && stripos($v, 'authorization:') === 0) {
-                $v = 'Authorization: Bearer <REDACTED>';
-            }
-        });
-        $serverLogger->debug("[HttpRequestTask] Raw completion result (masked): " . json_encode($safeResults));
-
         if ($result === null) {
-            $serverLogger->error("[HttpRequestTask] No result returned from BulkCurlTask");
             $this->triggerCallback([
                 'requestId' => $this->requestId,
                 'error' => 'No result from BulkCurlTask',
@@ -262,12 +234,9 @@ class HttpRequestTask {
             $response = $result->getBody();
             $headers = $result->getHeaders();
             
-            $serverLogger->info("[HttpRequestTask] Received InternetRequestResult code=" . $httpCode);
-            
             // Check for errors and retry if needed
             if ($httpCode >= 400) {
                 $short = strlen($response) > 1000 ? substr($response, 0, 1000) . '... (truncated)' : $response;
-                $serverLogger->error("[HttpRequestTask] HTTP " . $httpCode . " Response: " . $short);
                 
                 // Parse Retry-After header for rate limiting
                 $retryAfter = $this->parseRetryAfter($headers);
@@ -299,7 +268,6 @@ class HttpRequestTask {
         // InternetException objects - retry on DNS/connection errors
         if ($result instanceof InternetException) {
             $errorMsg = $result->getMessage();
-            $serverLogger->error("[HttpRequestTask] InternetException: " . $errorMsg);
             
             // Retry on DNS or connection failures
             if ($this->shouldRetry($errorMsg, 0)) {
@@ -317,7 +285,6 @@ class HttpRequestTask {
 
         // If result is an array with error information (common)
         if (is_array($result) && isset($result['error'])) {
-            $serverLogger->error("[HttpRequestTask] BulkCurl returned error: " . (is_string($result['error']) ? $result['error'] : json_encode($result['error'])));
             $this->triggerCallback([
                 'requestId' => $this->requestId,
                 'error' => $result['error'],
@@ -328,9 +295,6 @@ class HttpRequestTask {
 
         // If result is a string (successful response)
         if (is_string($result)) {
-            $serverLogger->info("[HttpRequestTask] Received string response (len=" . strlen($result) . ")");
-            $sample = strlen($result) > 1000 ? substr($result, 0, 1000) . '... (truncated)' : $result;
-            $serverLogger->debug("[HttpRequestTask] Response sample: " . $sample);
             $this->triggerCallback([
                 'requestId' => $this->requestId,
                 'response' => $result,
@@ -347,7 +311,6 @@ class HttpRequestTask {
             $headers = $result['headers'] ?? [];
 
             if (empty($response)) {
-                $serverLogger->error("[HttpRequestTask] Empty response from server, httpCode=" . $httpCode);
                 $this->triggerCallback([
                     'requestId' => $this->requestId,
                     'error' => 'Empty response from server',
@@ -357,9 +320,7 @@ class HttpRequestTask {
             }
 
             if ($httpCode >= 400) {
-                // log more details for debugging
                 $short = strlen($response) > 1000 ? substr($response, 0, 1000) . '... (truncated)' : $response;
-                $serverLogger->error("[HttpRequestTask] HTTP " . $httpCode . " Response: " . $short);
                 
                 // Parse Retry-After header for rate limiting
                 $retryAfter = $this->parseRetryAfter($headers ?? []);
@@ -378,7 +339,6 @@ class HttpRequestTask {
                 return;
             }
 
-            $serverLogger->info("[HttpRequestTask] HTTP " . $httpCode . " OK, response len=" . strlen($response));
             $this->triggerCallback([
                 'requestId' => $this->requestId,
                 'response' => $response,
@@ -403,7 +363,6 @@ class HttpRequestTask {
             $resultDetails = " (failed to stringify result)";
         }
 
-        $serverLogger->error("[HttpRequestTask] Unexpected result format: " . $resultType . $resultDetails);
         $this->triggerCallback([
             'requestId' => $this->requestId,
             'error' => 'Unexpected result format from BulkCurlTask: ' . $resultType,
@@ -465,9 +424,6 @@ class HttpRequestTask {
         // Use Retry-After if provided, otherwise exponential backoff
         $backoffSeconds = $retryAfter > 0 ? $retryAfter : min(pow(2, $this->retryCount), 8);
         
-        $serverLogger = Server::getInstance()->getLogger();
-        $serverLogger->info("[HttpRequestTask] Retrying request #{$this->retryCount} in {$backoffSeconds}s for URL: " . $this->url);
-        
         // Schedule retry after backoff delay using plugin scheduler
         if ($this->plugin instanceof Main) {
             $this->plugin->getScheduler()->scheduleDelayedTask(
@@ -515,7 +471,6 @@ class HttpRequestTask {
         if (isset($maskedForLog['response']) && is_string($maskedForLog['response'])) {
             $maskedForLog['response'] = (strlen($maskedForLog['response']) > 2000) ? substr($maskedForLog['response'], 0, 2000) . '... (truncated)' : $maskedForLog['response'];
         }
-        $server->getLogger()->debug("[HttpRequestTask] Triggering callback with result (masked): " . json_encode($maskedForLog));
 
         if ($plugin !== null && method_exists($plugin, $this->callbackMethod)) {
             // Pass the full result including requestId for proper routing
@@ -523,8 +478,6 @@ class HttpRequestTask {
         } elseif (method_exists($this->callbackObject, $this->callbackMethod)) {
             // Direct callback to the provided object
             $this->callbackObject->{$this->callbackMethod}($result);
-        } else {
-            $server->getLogger()->warning("[HttpRequestTask] No valid callback found for method: " . $this->callbackMethod);
         }
     }
 }

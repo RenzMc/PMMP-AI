@@ -31,18 +31,31 @@ class ServerFeatureManager {
      * Load features from fiturserver.yml
      */
     private function loadFeatures(): void {
-        // Create default fiturserver.yml if it doesn't exist
-        $configPath = $this->plugin->getDataFolder() . "fiturserver.yml";
-        if (!file_exists($configPath)) {
-            $this->plugin->saveResource("fiturserver.yml");
-        }
-        
-        // Load the features config
-        $this->featureConfig = new Config($configPath, Config::YAML);
-        $this->features = $this->featureConfig->getAll();
-        
-        if ($this->plugin->isDebugEnabled()) {
-            $this->plugin->getLogger()->debug("Loaded " . count($this->features) . " server feature categories");
+        try {
+            // Create default fiturserver.yml if it doesn't exist
+            $configPath = $this->plugin->getDataFolder() . "fiturserver.yml";
+            if (!file_exists($configPath)) {
+                $this->plugin->getLogger()->info("fiturserver.yml not found, creating default configuration");
+                $this->plugin->saveResource("fiturserver.yml", true);
+                
+                // Double check if the file was created successfully
+                if (!file_exists($configPath)) {
+                    $this->plugin->getLogger()->error("Failed to create fiturserver.yml, using empty configuration");
+                    $this->features = [];
+                    return;
+                }
+            }
+            
+            // Load the features config
+            $this->featureConfig = new Config($configPath, Config::YAML);
+            $this->features = $this->featureConfig->getAll();
+            
+            if ($this->plugin->isDebugEnabled()) {
+                $this->plugin->getLogger()->debug("Loaded " . count($this->features) . " server feature categories");
+            }
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error loading server features: " . $e->getMessage());
+            $this->features = [];
         }
     }
 
@@ -609,9 +622,31 @@ class ServerFeatureManager {
 
     /**
      * Save the features to the config file
+     * 
+     * @return bool Success status
      */
-    public function saveFeatures(): void {
-        $this->featureConfig->setAll($this->features);
-        $this->featureConfig->save();
+    public function saveFeatures(): bool {
+        try {
+            // Ensure the directory exists before saving
+            $configDir = dirname($this->featureConfig->getPath());
+            if (!is_dir($configDir)) {
+                if (!@mkdir($configDir, 0777, true) && !is_dir($configDir)) {
+                    $this->plugin->getLogger()->error("Failed to create feature config directory: " . $configDir);
+                    return false;
+                }
+            }
+            
+            $this->featureConfig->setAll($this->features);
+            
+            if (!$this->featureConfig->save()) {
+                $this->plugin->getLogger()->error("Failed to save feature configuration");
+                return false;
+            }
+            
+            return true;
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error saving features: " . $e->getMessage());
+            return false;
+        }
     }
 }

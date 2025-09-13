@@ -256,6 +256,13 @@ class AICommand extends Command {
      * @return bool
      */
     private function processDirectQuery(Player $player, string $query): bool {
+        // Validate query
+        $query = trim($query);
+        if (empty($query)) {
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.enter_question_generic");
+            return false;
+        }
+        
         // Check if token system is enabled and player has tokens
         $tokenManager = $this->plugin->getTokenManager();
         if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
@@ -270,6 +277,9 @@ class AICommand extends Command {
             return false;
         }
         
+        // First cancel any existing requests to ensure clean state
+        $requestManager->cancelPlayerRequests($player->getName());
+        
         $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.processing_query");
         
         try {
@@ -281,20 +291,36 @@ class AICommand extends Command {
                 'player' => $player->getName() // Store player name for safety
             ]);
             
-            // Process the query asynchronously
-            $response = $this->plugin->getProviderManager()->processQuery($player, $query);
-            
-            // Check if this is a processing message (async) or actual response (sync/cached)
-            $isProcessingMessage = strpos($response, 'Processing your') !== false || 
-                                 strpos($response, 'Processing') !== false || 
-                                 strpos($response, 'Please wait') !== false;
-            
-            if (!$isProcessingMessage) {
-                // This is a synchronous response (cached or fallback) - send it immediately
-                $this->handleDirectQueryResponse($player, $query, $response, $tokenManager);
-            }
-            // For async responses, the callback will be handled by AIProviderManager->handleProviderAsyncResponse
-            // which will call our handleDirectQueryCallback method
+            // Process the query asynchronously with a delay to ensure proper setup
+            $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(
+                function() use ($player, $query, $tokenManager, $requestManager): void {
+                    if (!$player->isOnline()) return;
+                    
+                    try {
+                        // Process the query asynchronously
+                        $response = $this->plugin->getProviderManager()->processQuery($player, $query);
+                        
+                        // Check if this is a processing message (async) or actual response (sync/cached)
+                        $isProcessingMessage = strpos($response, 'Processing your') !== false || 
+                                            strpos($response, 'Processing') !== false || 
+                                            strpos($response, 'Please wait') !== false;
+                        
+                        if (!$isProcessingMessage) {
+                            // This is a synchronous response (cached or fallback) - send it immediately
+                            $this->handleDirectQueryResponse($player, $query, $response, $tokenManager);
+                        }
+                    } catch (\Throwable $e) {
+                        $this->plugin->getLogger()->error("Error in processDirectQuery for player " . $player->getName() . ": " . $e->getMessage());
+                        
+                        // Send error message using configurable messages
+                        $errorMessage = $this->getErrorMessage($e);
+                        $player->sendMessage($errorMessage);
+                        
+                        // Clean up request
+                        $requestManager->completeRequest($player->getName(), '');
+                    }
+                }
+            ), 5); // Short delay to ensure proper setup
             
         } catch (\Throwable $e) {
             $this->plugin->getLogger()->error("Error in processDirectQuery for player " . $player->getName() . ": " . $e->getMessage());

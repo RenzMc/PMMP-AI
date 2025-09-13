@@ -38,14 +38,20 @@ class TokenManager {
         // Create data directory if it doesn't exist
         $tokensDir = $plugin->getDataFolder() . "tokens/";
         if (!is_dir($tokensDir)) {
-            @mkdir($tokensDir, 0777, true);
+            // Use recursive directory creation with error handling
+            if (!@mkdir($tokensDir, 0777, true) && !is_dir($tokensDir)) {
+                $plugin->getLogger()->error("Failed to create tokens directory: " . $tokensDir);
+                // Create a fallback directory in the main plugin folder
+                $tokensDir = $plugin->getDataFolder();
+                $plugin->getLogger()->info("Using fallback directory for token data: " . $tokensDir);
+            }
         }
         
-        // Initialize token data storage
-        $this->tokenData = new Config($tokensDir . "token_data.yml", Config::YAML, []);
+        // Initialize token data storage with default values
+        $this->tokenData = new Config($tokensDir . "token_data.yml", Config::YAML, ["players" => []]);
         
-        // Initialize usage data storage
-        $this->usageData = new Config($tokensDir . "usage_data.yml", Config::YAML, []);
+        // Initialize usage data storage with default values
+        $this->usageData = new Config($tokensDir . "usage_data.yml", Config::YAML, ["usage" => []]);
         
         // Load token data
         $this->loadTokenData();
@@ -104,13 +110,65 @@ class TokenManager {
      * 
      * @param string $playerName
      * @param array $data
+     * @return bool Success status
      */
-    private function savePlayerData(string $playerName, array $data): void {
-        $players = $this->tokenData->get("players", []);
-        $players[$playerName] = $data;
-        
-        $this->tokenData->set("players", $players);
-        $this->tokenData->save();
+    private function savePlayerData(string $playerName, array $data): bool {
+        try {
+            // Get current players data
+            $players = $this->tokenData->get("players", []);
+            $players[$playerName] = $data;
+            
+            // Update the data in memory
+            $this->tokenData->set("players", $players);
+            
+            // Ensure the directory exists before saving
+            $tokenDir = dirname($this->tokenData->getPath());
+            if (!is_dir($tokenDir)) {
+                if (!@mkdir($tokenDir, 0777, true) && !is_dir($tokenDir)) {
+                    $this->plugin->getLogger()->error("Failed to create token data directory: " . $tokenDir);
+                    
+                    // Try to use a fallback directory in the main plugin folder
+                    $fallbackDir = $this->plugin->getDataFolder();
+                    $this->plugin->getLogger()->info("Using fallback directory for token data: " . $fallbackDir);
+                    
+                    // Create a new Config object with the fallback path
+                    $fallbackPath = $fallbackDir . "token_data.yml";
+                    $this->tokenData = new Config($fallbackPath, Config::YAML, ["players" => $players]);
+                }
+            }
+            
+            // Double check file permissions
+            $filePath = $this->tokenData->getPath();
+            $dirPath = dirname($filePath);
+            
+            // Ensure directory is writable
+            if (!is_writable($dirPath) && !@chmod($dirPath, 0777)) {
+                $this->plugin->getLogger()->warning("Token directory is not writable: " . $dirPath);
+            }
+            
+            // Save with error handling
+            if (!$this->tokenData->save()) {
+                $this->plugin->getLogger()->error("Failed to save token data for player: " . $playerName);
+                
+                // Try to save to a different location as last resort
+                $emergencyPath = $this->plugin->getDataFolder() . "emergency_token_data.yml";
+                $emergencyConfig = new Config($emergencyPath, Config::YAML);
+                $emergencyConfig->setAll(["players" => $players]);
+                if ($emergencyConfig->save()) {
+                    $this->plugin->getLogger()->info("Saved token data to emergency location: " . $emergencyPath);
+                    $this->tokenData = $emergencyConfig; // Use this config from now on
+                    return true;
+                }
+                
+                return false;
+            }
+            
+            return true;
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error saving player token data: " . $e->getMessage());
+            $this->plugin->getLogger()->error("Stack trace: " . $e->getTraceAsString());
+            return false;
+        }
     }
 
     /**
@@ -151,26 +209,35 @@ class TokenManager {
             return true; // Token system disabled, always succeed
         }
         
-        $playerName = $player->getName();
-        $playerData = $this->getPlayerData($playerName);
-        
-        // First try to use purchased tokens
-        if ($playerData["tokens"] > 0) {
-            $playerData["tokens"]--;
-            $this->savePlayerData($playerName, $playerData);
-            $this->logTokenUsage($playerName, "purchased");
-            return true;
+        try {
+            $playerName = $player->getName();
+            $playerData = $this->getPlayerData($playerName);
+            
+            // First try to use purchased tokens
+            if ($playerData["tokens"] > 0) {
+                $playerData["tokens"]--;
+                if ($this->savePlayerData($playerName, $playerData)) {
+                    $this->logTokenUsage($playerName, "purchased");
+                    return true;
+                }
+                return false;
+            }
+            
+            // Then try to use free daily tokens
+            if ($playerData["free_tokens_used_today"] < $this->freeDailyTokens) {
+                $playerData["free_tokens_used_today"]++;
+                if ($this->savePlayerData($playerName, $playerData)) {
+                    $this->logTokenUsage($playerName, "free");
+                    return true;
+                }
+                return false;
+            }
+            
+            return false;
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error using token: " . $e->getMessage());
+            return false;
         }
-        
-        // Then try to use free daily tokens
-        if ($playerData["free_tokens_used_today"] < $this->freeDailyTokens) {
-            $playerData["free_tokens_used_today"]++;
-            $this->savePlayerData($playerName, $playerData);
-            $this->logTokenUsage($playerName, "free");
-            return true;
-        }
-        
-        return false;
     }
 
     /**
@@ -249,26 +316,49 @@ class TokenManager {
      * 
      * @param string $playerName
      * @param string $tokenType
+     * @return bool Success status
      */
-    private function logTokenUsage(string $playerName, string $tokenType): void {
-        $usage = $this->usageData->get("usage", []);
-        $date = date("Y-m-d");
-        
-        if (!isset($usage[$date])) {
-            $usage[$date] = [];
+    private function logTokenUsage(string $playerName, string $tokenType): bool {
+        try {
+            $usage = $this->usageData->get("usage", []);
+            $date = date("Y-m-d");
+            
+            if (!isset($usage[$date])) {
+                $usage[$date] = [];
+            }
+            
+            if (!isset($usage[$date][$playerName])) {
+                $usage[$date][$playerName] = [
+                    "free" => 0,
+                    "purchased" => 0
+                ];
+            }
+            
+            $usage[$date][$playerName][$tokenType]++;
+            
+            // Update in memory
+            $this->usageData->set("usage", $usage);
+            
+            // Ensure the directory exists before saving
+            $usageDir = dirname($this->usageData->getPath());
+            if (!is_dir($usageDir)) {
+                if (!@mkdir($usageDir, 0777, true) && !is_dir($usageDir)) {
+                    $this->plugin->getLogger()->error("Failed to create usage data directory: " . $usageDir);
+                    return false;
+                }
+            }
+            
+            // Save with error handling
+            if (!$this->usageData->save()) {
+                $this->plugin->getLogger()->error("Failed to save token usage data for player: " . $playerName);
+                return false;
+            }
+            
+            return true;
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error logging token usage: " . $e->getMessage());
+            return false;
         }
-        
-        if (!isset($usage[$date][$playerName])) {
-            $usage[$date][$playerName] = [
-                "free" => 0,
-                "purchased" => 0
-            ];
-        }
-        
-        $usage[$date][$playerName][$tokenType]++;
-        
-        $this->usageData->set("usage", $usage);
-        $this->usageData->save();
     }
 
     /**

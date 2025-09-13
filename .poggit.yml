@@ -1,0 +1,8 @@
+--- # Poggit-CI Manifest. Open the CI at https://poggit.pmmp.io/ci/RenzMc/PMMP-AI
+build-by-default: true
+branches:
+- main
+projects:
+  PMMP-AI:
+    path: ""
+...

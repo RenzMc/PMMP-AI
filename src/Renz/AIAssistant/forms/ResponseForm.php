@@ -10,7 +10,7 @@ use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
 use Renz\AIAssistant\utils\MinecraftTextFormatter;
 use Renz\AIAssistant\forms\MainForm;
-use Renz\AIAssistant\forms\ChatForm;
+use Renz\AIAssistant\forms\MainForm;
 
 class ResponseForm {
     /** @var Main */
@@ -35,29 +35,12 @@ class ResponseForm {
  * @param array $pages
  */
    public function sendTo(Player $player, string $question, string $response, int $currentPage = 0, array $pages = []): void {
-    // Debug logging
-    $this->plugin->getLogger()->debug("ResponseForm::sendTo - Player: " . $player->getName() . ", Page: " . $currentPage);
-
-    // Enhanced loading state detection
-    $isLoading = strpos($response, "Processing") !== false ||
-                 strpos($response, "Please wait") !== false ||
-                 strpos($response, "Generating") !== false ||
-                 strpos($response, "Loading") !== false;
-
     // Enhanced error state detection
     $isError = (strpos($response, "§c") === 0) ||
                (strpos($response, "error") !== false) ||
                (strpos($response, "failed") !== false) ||
                (strpos($response, "Error:") !== false) ||
                (strpos($response, "Failed:") !== false);
-
-    // Debug response state
-    $this->plugin->getLogger()->debug(
-        "ResponseForm state - IsLoading: " . ($isLoading ? 'true' : 'false') .
-        ", IsError: " . ($isError ? 'true' : 'false') .
-        ", Response length: " . strlen($response) .
-        ", First 100 chars: " . substr($response, 0, min(100, strlen($response)))
-    );
 
     // Ensure response content is properly formatted and not empty
     if (empty(trim($response))) {
@@ -68,28 +51,25 @@ class ResponseForm {
     // Improved request management - cancel if error or final (kept consistent with original intent)
     if ($isError) {
         $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
-    } elseif (!$isLoading) {
+    } else {
         $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
     }
     // (Note: both branches call cancelPlayerRequests; kept intentionally per original logic)
 
     // Split response into pages if it's too long and not already paginated
-    if (empty($pages) && !$isLoading && !$isError) {
+    if (empty($pages) && !$isError) {
         $pages = $this->splitResponseIntoPages($response);
     } elseif (empty($pages)) {
-        $pages = [$response]; // Single page for loading/error states
+        $pages = [$response]; // Single page for error states
     }
 
     // Fallback for empty pages
     if (empty($pages)) {
         $pages = [$response];
-        $this->plugin->getLogger()->warning("ResponseForm: pages array was empty, using fallback");
     }
 
     $totalPages = count($pages);
     $currentResponse = $pages[$currentPage] ?? $pages[0] ?? $response; // Triple fallback
-
-    $this->plugin->getLogger()->debug("ResponseForm: Total pages: $totalPages, Current response length: " . strlen($currentResponse));
 
     // Create button mapping for dynamic handling
     $buttonMap = [];
@@ -100,8 +80,6 @@ class ResponseForm {
         if ($data === null) {
             return;
         }
-
-        $this->plugin->getLogger()->debug("ResponseForm: Button clicked - Index: $data, Action: " . ($buttonMap[$data] ?? 'unknown'));
 
         $action = $buttonMap[$data] ?? 'back';
 
@@ -129,10 +107,13 @@ class ResponseForm {
             case 'retry':
                 $this->retryQuestion($player, $question);
                 break;
+                
+            case 'new_session':
+                $this->createNewSession($player);
+                break;
 
             default:
                 // Unknown action fallback
-                $this->plugin->getLogger()->warning("ResponseForm: Unknown action requested: " . $action);
                 break;
         }
     });
@@ -151,19 +132,17 @@ class ResponseForm {
     }
 
     // Enhanced response formatting (assumes formatResponseContent exists)
-    $formattedResponse = $this->formatResponseContent($currentResponse, $isError, $isLoading);
+    $formattedResponse = $this->formatResponseContent($currentResponse, $isError);
 
     // Truncate response if too long for SimpleForm
     $maxContentLength = 1500;
     if (strlen($formattedResponse) > $maxContentLength) {
         $formattedResponse = mb_substr($formattedResponse, 0, $maxContentLength) . "\n\n... (content truncated, use pagination)";
-        $this->plugin->getLogger()->debug("ResponseForm: Content truncated from " . strlen($currentResponse) . " to " . strlen($formattedResponse) . " chars");
     }
 
     // Format content based on state
     $questionColor = MinecraftTextFormatter::COLOR_YELLOW;
-    $responseColor = $isError ? MinecraftTextFormatter::COLOR_RED :
-                     ($isLoading ? MinecraftTextFormatter::COLOR_AQUA : MinecraftTextFormatter::COLOR_GREEN);
+    $responseColor = $isError ? MinecraftTextFormatter::COLOR_RED : MinecraftTextFormatter::COLOR_GREEN;
 
     $content = $questionColor . $questionPrefix . MinecraftTextFormatter::COLOR_WHITE . $question . "\n\n" .
                $responseColor . $responsePrefix . "\n" . $formattedResponse;
@@ -187,52 +166,51 @@ class ResponseForm {
     $buttonMap[$buttonIndex++] = 'back';
 
     // Add navigation and action buttons based on state
-    if (!$isLoading) {
-        // Pagination buttons (if multiple pages exist)
-        if ($totalPages > 1) {
-            if ($currentPage < $totalPages - 1) {
-                $form->addButton("§aNext Page", 0, "textures/ui/arrow_right");
-                $buttonMap[$buttonIndex++] = 'next_page';
-            }
-
-            if ($currentPage > 0) {
-                $form->addButton("§ePrevious Page", 0, "textures/ui/arrow_left");
-                $buttonMap[$buttonIndex++] = 'prev_page';
-            }
+    // Pagination buttons (if multiple pages exist)
+    if ($totalPages > 1) {
+        if ($currentPage < $totalPages - 1) {
+            $form->addButton("§aNext Page", 0, "textures/ui/arrow_right");
+            $buttonMap[$buttonIndex++] = 'next_page';
         }
 
-        // Ask another question button (always show if not loading)
-        $newQuestionText = $this->plugin->getFormSetting("response_form.buttons.new_question.text", "Ask Another Question");
-        $newQuestionColor = $this->plugin->getFormSetting("response_form.buttons.new_question.color", "&a");
-        $newQuestionTexture = $this->plugin->getFormSetting("response_form.buttons.new_question.texture", "textures/ui/chat_icon");
-        $form->addButton($this->plugin->formatFormText($newQuestionColor . $newQuestionText), 0, $newQuestionTexture);
-        $buttonMap[$buttonIndex++] = 'ask_another';
-
-        // Retry button (show if error occurred)
-        if ($isError) {
-            $form->addButton("§6Retry Question", 0, "textures/ui/refresh");
-            $buttonMap[$buttonIndex++] = 'retry';
+        if ($currentPage > 0) {
+            $form->addButton("§ePrevious Page", 0, "textures/ui/arrow_left");
+            $buttonMap[$buttonIndex++] = 'prev_page';
         }
     }
 
-    // Debug button mapping
-    $this->plugin->getLogger()->debug("ResponseForm: Button mapping - " . json_encode($buttonMap));
+    // Ask another question button (always show)
+    $newQuestionText = $this->plugin->getFormSetting("response_form.buttons.new_question.text", "Ask Another Question");
+    $newQuestionColor = $this->plugin->getFormSetting("response_form.buttons.new_question.color", "&a");
+    $newQuestionTexture = $this->plugin->getFormSetting("response_form.buttons.new_question.texture", "textures/ui/chat_icon");
+    $form->addButton($this->plugin->formatFormText($newQuestionColor . $newQuestionText), 0, $newQuestionTexture);
+    $buttonMap[$buttonIndex++] = 'ask_another';
+    
+    // New Session button
+    $newSessionText = $this->plugin->getFormSetting("response_form.buttons.new_session.text", "New Session");
+    $newSessionColor = $this->plugin->getFormSetting("response_form.buttons.new_session.color", "&e");
+    $newSessionTexture = $this->plugin->getFormSetting("response_form.buttons.new_session.texture", "textures/ui/plus");
+    $form->addButton($this->plugin->formatFormText($newSessionColor . $newSessionText), 0, $newSessionTexture);
+    $buttonMap[$buttonIndex++] = 'new_session';
+
+    // Retry button (show if error occurred)
+    if ($isError) {
+        $form->addButton("§6Retry Question", 0, "textures/ui/refresh");
+        $buttonMap[$buttonIndex++] = 'retry';
+    }
 
     // Add to conversation history only on first page and final response
-    if ($currentPage === 0 && !$isLoading && !$isError) {
+    if ($currentPage === 0 && !$isError) {
         $this->plugin->getConversationManager()->addToConversation($player->getName(), $question, $response);
     }
 
     // Adjusted delay based on state (ticks)
-    $delay = $isLoading ? 5 : 10; // ticks
+    $delay = 10; // ticks
 
     $this->plugin->getScheduler()->scheduleDelayedTask(
-        new \pocketmine\scheduler\ClosureTask(function() use ($form, $player, $currentPage, $isLoading): void {
+        new \pocketmine\scheduler\ClosureTask(function() use ($form, $player, $currentPage): void {
             if ($player->isOnline()) {
-                $this->plugin->getLogger()->debug("Sending ResponseForm to " . $player->getName() . " page " . $currentPage . " (loading: " . ($isLoading ? 'yes' : 'no') . ")");
                 $form->sendToPlayer($player);
-            } else {
-                $this->plugin->getLogger()->warning("Player " . $player->getName() . " went offline before form could be sent");
             }
         }),
         $delay
@@ -247,8 +225,6 @@ class ResponseForm {
      * @param string $finalResponse
      */
     public function updateWithFinalResponse(Player $player, string $question, string $finalResponse): void {
-        $this->plugin->getLogger()->debug("Updating ResponseForm with final response for " . $player->getName());
-        
         // Force close current form first
         $player->removeCurrentWindow();
         
@@ -257,8 +233,6 @@ class ResponseForm {
             function() use ($player, $question, $finalResponse): void {
                 if ($player->isOnline()) {
                     $this->sendTo($player, $question, $finalResponse);
-                } else {
-                    $this->plugin->getLogger()->warning("Player " . $player->getName() . " went offline during response update");
                 }
             }
         ), 15); // Longer delay to ensure form is properly closed
@@ -269,10 +243,9 @@ class ResponseForm {
      * 
      * @param string $response
      * @param bool $isError
-     * @param bool $isLoading
      * @return string
      */
-    private function formatResponseContent(string $response, bool $isError, bool $isLoading): string {
+    private function formatResponseContent(string $response, bool $isError): string {
         // Ensure response content is properly formatted and visible
         $formattedResponse = trim($response);
         
@@ -285,13 +258,10 @@ class ResponseForm {
             $formattedResponse = MinecraftTextFormatter::formatText($formattedResponse);
         }
         
-        // Add status indicators (no emojis, just text)
-        if ($isLoading) {
-            $formattedResponse = "§b[LOADING] " . $formattedResponse;
-        } elseif ($isError) {
-            $formattedResponse = "§c[ERROR] " . $formattedResponse;
+        if ($isError) {
+            $formattedResponse = "§l§4[ERROR] " . $formattedResponse;
         } else {
-            $formattedResponse = "§a[COMPLETE] " . $formattedResponse;
+            $formattedResponse = "§l§2[COMPLETE] " . $formattedResponse;
         }
         
         return $formattedResponse;
@@ -340,14 +310,11 @@ class ResponseForm {
         
         // Final safety check
         if (empty($pages)) {
-            $this->plugin->getLogger()->warning("splitResponseIntoPages: Failed to split response, using fallback");
             $pages = array_filter(str_split($response, $maxCharsPerPage));
             if (empty($pages)) {
                 $pages = [$response]; // Ultimate fallback
             }
         }
-        
-        $this->plugin->getLogger()->debug("splitResponseIntoPages: Created " . count($pages) . " pages from " . strlen($response) . " chars");
         
         return $pages;
     }
@@ -358,8 +325,6 @@ class ResponseForm {
      * @param Player $player
      */
     private function askAnotherQuestion(Player $player): void {
-        $this->plugin->getLogger()->debug("askAnotherQuestion called for " . $player->getName());
-        
         // Ensure request is completely cleaned up before opening new chat form
         $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
         
@@ -367,17 +332,14 @@ class ResponseForm {
         $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(
             function() use ($player): void {
                 if ($player->isOnline()) {
-                    $form = new ChatForm($this->plugin);
-                    $form->sendTo($player);
+                    $form = new MainForm($this->plugin);
+                    $form->openChatForm($player);
                     $this->plugin->getMessageManager()->sendToastNotification(
                         $player,
                         "info",
                         $this->plugin->getMessageManager()->getConfigurableMessage("toasts.response.new_question_title"),
                         $this->plugin->getMessageManager()->getConfigurableMessage("toasts.response.new_question_body")
                     );
-                    $this->plugin->getLogger()->debug("ChatForm sent to " . $player->getName());
-                } else {
-                    $this->plugin->getLogger()->warning("Player " . $player->getName() . " went offline before ChatForm could be sent");
                 }
             }
         ), 15); // Increased delay for better cleanup
@@ -390,8 +352,6 @@ class ResponseForm {
      * @param string $question
      */
     private function retryQuestion(Player $player, string $question): void {
-        $this->plugin->getLogger()->debug("retryQuestion called for " . $player->getName() . " with question: " . substr($question, 0, 50) . "...");
-        
         // Retry the same question
         $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
         
@@ -406,22 +366,14 @@ class ResponseForm {
                         'tokenManager' => $this->plugin->getTokenManager()
                     ]);
                     
-                    // Show loading response form immediately
-                    $responseForm = new ResponseForm($this->plugin);
-                    $loadingMessage = "§bProcessing your request, please wait...";
-                    $responseForm->sendTo($player, $question, $loadingMessage);
-                    
                     // Process the query
                     try {
                         $this->plugin->getProviderManager()->processQuery($player, $question);
-                        $this->plugin->getLogger()->debug("Retry query processed for " . $player->getName());
                     } catch (\Throwable $e) {
-                        $this->plugin->getLogger()->error("Error in retryQuestion: " . $e->getMessage());
                         $errorMessage = $this->getErrorMessage($e);
+                        $responseForm = new ResponseForm($this->plugin);
                         $responseForm->updateWithFinalResponse($player, $question, $errorMessage);
                     }
-                } else {
-                    $this->plugin->getLogger()->warning("Player " . $player->getName() . " went offline before retry could be processed");
                 }
             }
         ), 15); // Increased delay for better cleanup
@@ -433,6 +385,34 @@ class ResponseForm {
      * @param \Throwable $e
      * @return string
      */
+    /**
+     * Create a new session and redirect to chat form
+     * 
+     * @param Player $player
+     */
+    private function createNewSession(Player $player): void {
+        // Create a new session
+        $sessionId = $this->plugin->getConversationManager()->createNewSession($player->getName());
+        
+        // Notify the player
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "info",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_title", "New Session Created"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_body", "You can now start a new conversation.")
+        );
+        
+        // Open chat form for the new session
+        $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(
+            function() use ($player): void {
+                if ($player->isOnline()) {
+                    $form = new ChatForm($this->plugin);
+                    $form->sendTo($player);
+                }
+            }
+        ), 15);
+    }
+    
     private function getErrorMessage(\Throwable $e): string {
         $errorMsg = $e->getMessage();
         

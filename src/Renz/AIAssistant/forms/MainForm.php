@@ -9,6 +9,8 @@ use jojoe77777\FormAPI\CustomForm;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
+use Renz\AIAssistant\forms\ResponseForm;
+use Renz\AIAssistant\forms\TokenShopForm;
 
 class MainForm {
     /** @var Main */
@@ -36,8 +38,7 @@ class MainForm {
             
             switch ($data) {
                 case 0: // Chat with AI
-                    $form = new ChatForm($this->plugin);
-                    $form->sendTo($player);
+                    $this->openChatForm($player);
                     break;
                     
                 case 1: // View Chat History
@@ -359,5 +360,121 @@ class MainForm {
         
         // Send toast notification when form is opened
         $this->plugin->getMessageManager()->sendToastNotification($player, "info", $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_title"), $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_body"));
+    }
+
+    /**
+     * Open the chat form
+     * 
+     * @param Player $player
+     */
+    public function openChatForm(Player $player): void {
+    $form = new CustomForm(function(Player $player, ?array $data) {
+        if ($data === null) return;
+
+        $question = trim((string)($data[1] ?? ""));
+        if ($question === "") {
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.enter_question_first");
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_question");
+            $this->openChatForm($player);
+            return;
+        }
+
+        $tokenManager = $this->plugin->getTokenManager();
+        if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
+            (new TokenShopForm($this->plugin))->sendTo($player);
+            return;
+        }
+
+        $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+        if ($requestManager->hasActiveRequest($player->getName())) {
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
+            return;
+        }
+
+        $requestManager->setFormContext($player->getName(), [
+            'type' => 'chat_form',
+            'question' => $question,
+            'tokenManager' => $tokenManager
+        ]);
+
+        $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
+
+        try {
+            $this->plugin->getProviderManager()->processQuery($player, $question);
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("ChatForm processQuery error: " . $e->getMessage());
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
+            return;
+        }
+    });
+
+    $title = $this->plugin->formatFormText($this->plugin->getFormSetting("general.text_formatting.title", "&l&b") . 
+                                           $this->plugin->getFormSetting("chat_form.title", "Chat with AI"));
+    $content = $this->plugin->getFormSetting("chat_form.content", "What would you like to ask the AI Assistant?");
+    $placeholder = $this->plugin->getFormSetting("chat_form.placeholder", "Type your question here...");
+
+    $form->setTitle($title);
+
+    $tokenManager = $this->plugin->getTokenManager();
+    if ($tokenManager->isEnabled()) {
+        $tokenStatus = $tokenManager->getTokenStatusMessage($player->getName());
+        $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
+        $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
+        $form->addLabel(TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n") .
+                        TextFormat::colorize($contentFormat . $content));
+    } else {
+        $form->addLabel(TextFormat::colorize($this->plugin->getFormSetting("general.text_formatting.content", "&7") . $content));
+    }
+
+    $form->addInput(TextFormat::colorize("&fYour Question:"), $placeholder);
+
+    $form->sendToPlayer($player);
+
+    $this->plugin->getMessageManager()->sendToastNotification(
+        $player,
+        "info",
+        $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_title"),
+        $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_body")
+    );
+}
+
+    /**
+     * Get appropriate error message based on exception type
+     *
+     * @param \Throwable $e
+     * @return string
+     */
+    private function getErrorMessage(\Throwable $e): string {
+        $errorMsg = $e->getMessage();
+
+        if (strpos($errorMsg, 'timeout') !== false || strpos($errorMsg, 'timed out') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_timeout_error");
+        }
+
+        if (strpos($errorMsg, 'connection') !== false || strpos($errorMsg, 'connect') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_connection_error");
+        }
+
+        if (strpos($errorMsg, 'rate limit') !== false || strpos($errorMsg, 'too many') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_rate_limit_error");
+        }
+
+        if (strpos($errorMsg, 'quota') !== false || strpos($errorMsg, 'exceeded') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_quota_exceeded");
+        }
+
+        if (strpos($errorMsg, 'invalid') !== false || strpos($errorMsg, 'parse') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_invalid_response");
+        }
+
+        if (strpos($errorMsg, 'unavailable') !== false || strpos($errorMsg, 'service') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_service_unavailable");
+        }
+
+        return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_unknown_error");
     }
 }

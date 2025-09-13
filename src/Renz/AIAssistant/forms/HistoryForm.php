@@ -40,17 +40,30 @@ class HistoryForm {
                 return;
             }
             
-            // Adjust index to account for the back button
-            $sessionIndex = $data - 1;
+            if ($data === 1) {
+                // New Session button pressed
+                $sessionId = $this->plugin->getConversationManager()->createNewSession($player->getName());
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "history.new_session_created");
+                
+                // Open chat form for the new session
+                $form = new MainForm($this->plugin);
+                $form->openChatForm($player);
+                return;
+            }
+            
+            // Adjust index to account for the back button and new session button
+            $sessionIndex = $data - 2;
             
             // Get session ID
             $sessions = $this->plugin->getConversationManager()->getSessionsMetadata($player->getName());
-            if (!isset($sessions[$sessionIndex])) {
+            $sessionKeys = array_keys($sessions);
+            
+            if (!isset($sessionKeys[$sessionIndex])) {
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "history.session_not_found");
                 return;
             }
             
-            $sessionId = $sessions[$sessionIndex]['id'];
+            $sessionId = $sessionKeys[$sessionIndex];
             
             // Show session details
             $this->showSessionDetails($player, $sessionId);
@@ -86,6 +99,13 @@ class HistoryForm {
         $backTexture = $this->plugin->getFormSetting("history_form.buttons.back.texture", "textures/ui/arrow_left");
         
         $form->addButton($this->plugin->formatFormText($backColor . $backText), 0, $backTexture);
+        
+        // Add New Session button
+        $newSessionText = $this->plugin->getFormSetting("history_form.buttons.new_session.text", "New Session");
+        $newSessionColor = $this->plugin->getFormSetting("history_form.buttons.new_session.color", "&a");
+        $newSessionTexture = $this->plugin->getFormSetting("history_form.buttons.new_session.texture", "textures/ui/plus");
+        
+        $form->addButton($this->plugin->formatFormText($newSessionColor . $newSessionText), 0, $newSessionTexture);
         
         // Add session buttons
         if (!empty($sessions)) {
@@ -125,6 +145,17 @@ class HistoryForm {
             }
             
             if ($data === 1) {
+                // Switch to this session button pressed
+                $this->plugin->getConversationManager()->setCurrentSession($player->getName(), $sessionId);
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "history.switched_to_session");
+                
+                // Open chat form for this session
+                $form = new MainForm($this->plugin);
+                $form->openChatForm($player);
+                return;
+            }
+            
+            if ($data === 2) {
                 // Delete button pressed
                 $this->plugin->getConversationManager()->deleteSession($player->getName(), $sessionId);
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "history.conversation_deleted");
@@ -167,6 +198,13 @@ class HistoryForm {
         $backTexture = $this->plugin->getFormSetting("history_form.buttons.back.texture", "textures/ui/arrow_left");
         
         $form->addButton($this->plugin->formatFormText($backColor . $backText), 0, $backTexture);
+        
+        // Add switch to session button
+        $switchText = $this->plugin->getFormSetting("history_form.buttons.switch.text", "Switch to Session");
+        $switchColor = $this->plugin->getFormSetting("history_form.buttons.switch.color", "&a");
+        $switchTexture = $this->plugin->getFormSetting("history_form.buttons.switch.texture", "textures/ui/check");
+        
+        $form->addButton($this->plugin->formatFormText($switchColor . $switchText), 0, $switchTexture);
         
         // Add delete button from config
         $deleteText = $this->plugin->getFormSetting("history_form.buttons.delete.text", "Delete");

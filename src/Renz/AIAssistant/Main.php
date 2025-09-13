@@ -91,14 +91,17 @@ class Main extends PluginBase implements Listener {
         $this->saveDefaultConfig();
         $this->config = $this->getConfig();
         
-        // Save default forms config if it doesn't exist
-        $this->saveResource("forms.yml");
-        $this->formsConfig = new Config($this->getDataFolder() . "forms.yml", Config::YAML);
-        
         // Ensure forms.yml exists and is properly loaded
         if (!file_exists($this->getDataFolder() . "forms.yml")) {
-            $this->getLogger()->warning("forms.yml not found, creating default configuration");
+            $this->getLogger()->info("forms.yml not found, creating default configuration");
             $this->saveResource("forms.yml", true);
+        }
+        $this->formsConfig = new Config($this->getDataFolder() . "forms.yml", Config::YAML);
+        
+        // Ensure fiturserver.yml exists and is properly loaded
+        if (!file_exists($this->getDataFolder() . "fiturserver.yml")) {
+            $this->getLogger()->info("fiturserver.yml not found, creating default configuration");
+            $this->saveResource("fiturserver.yml", true);
         }
         
         // Load debug mode setting

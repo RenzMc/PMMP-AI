@@ -5,7 +5,6 @@ api: 5.15.0
 author: Renz
 description: Advanced AI Assistant for Minecraft server with multi-provider API support, crafting help, building calculations, and more
 website: https://github.com/RenzMc/PMMP-AI
-depend: [FormAPI]
 
 permissions:
   aiassistant.command.ai:
