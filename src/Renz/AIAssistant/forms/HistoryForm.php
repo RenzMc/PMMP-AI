@@ -93,10 +93,12 @@ class HistoryForm {
             $viewColor = $this->plugin->getFormSetting("history_form.buttons.view.color", "&a");
             $viewTexture = $this->plugin->getFormSetting("history_form.buttons.view.texture", "textures/ui/check");
             
-            foreach ($sessions as $session) {
-                $timestamp = date('Y-m-d H:i:s', $session['timestamp']);
-                $firstMessage = $session['first_message'] ?? 'No message';
-                $buttonText = $this->plugin->formatFormText($viewColor . $viewText . ": " . substr($firstMessage, 0, 20) . "... (" . $timestamp . ")");
+            foreach ($sessions as $sessionId => $session) {
+                // Use created timestamp if available, otherwise last_used, otherwise current time
+                $timestamp = $session['created'] ?? $session['last_used'] ?? time();
+                $timestampStr = date('Y-m-d H:i:s', $timestamp);
+                $firstMessage = $session['title'] ?? $session['first_message'] ?? 'No message';
+                $buttonText = $this->plugin->formatFormText($viewColor . $viewText . ": " . substr($firstMessage, 0, 20) . "... (" . $timestampStr . ")");
                 $form->addButton($buttonText, 0, $viewTexture);
             }
         }

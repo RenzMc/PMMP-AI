@@ -28,7 +28,7 @@ api_providers:
   anthropic:
     enabled: true
     api_key: "YOUR_ANTHROPIC_API_KEY"
-    model: "claude-3-haiku-20240307"
+    model: "claude-3-5-sonnet-20241022"
     temperature: 0.7
     max_tokens: 500
     timeout: 30
@@ -37,7 +37,7 @@ api_providers:
   google:
     enabled: true
     api_key: "YOUR_GOOGLE_API_KEY"
-    model: "gemini-pro"
+    model: "gemini-1.5-flash"
     temperature: 0.7
     max_tokens: 500
     timeout: 30
@@ -102,12 +102,14 @@ messages:
     command_ingame_only: "§cThis command can only be used in-game."
     conversation_cleared: "§aYour conversation history has been cleared."
     no_permission_providers: "§cYou don't have permission to manage providers."
+    response_sent: "§a✅ Response sent to your chat!"
     provider_usage: "§cUsage: /ai provider [list|set <name>]"
     provider_set_usage: "§cUsage: /ai provider set <name>"
     provider_not_available: "§cProvider '{provider}' is not available."
     provider_set_success: "§aDefault provider set to '{provider}'."
     no_tokens_left: "§cYou don't have any tokens left. Use /ai to open the token shop."
     processing_query: "§bProcessing your query..."
+    request_already_active: "§cYou already have an active AI request. Please wait for it to complete."
     
   # Form validation messages  
   forms:
@@ -120,6 +122,14 @@ messages:
     building_calc_cancelled: "§eBuilding calculation cancelled."
     enter_question_generic: "§cPlease enter a question."
     enter_item_generic: "§cPlease enter an item name."
+    generation_failed: "§cFailed to generate AI response. Please try again."
+    ai_timeout_error: "§cAI request timed out. Please try again with a simpler question."
+    ai_connection_error: "§cFailed to connect to AI service. Please try again later."
+    ai_rate_limit_error: "§cToo many requests. Please wait a moment before trying again."
+    ai_quota_exceeded: "§cAI service quota exceeded. Please try again later."
+    ai_invalid_response: "§cReceived invalid response from AI. Please rephrase your question."
+    ai_service_unavailable: "§cAI service is currently unavailable. Please try again later."
+    ai_unknown_error: "§cAn unknown error occurred with the AI service. Please try again."
     
   # Token system messages
   tokens:

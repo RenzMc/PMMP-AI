@@ -62,6 +62,12 @@ class Main extends PluginBase implements Listener {
     
     /** @var bool */
     private bool $debug = false;
+    
+    /** @var string */
+    public string $cainfo_path; // CA certificate path for SSL
+    
+    /** @var resource */
+    private mixed $_cainfo_resource; // Stores CA cert during runtime
 
     /**
      * Called when the plugin is loaded
@@ -98,6 +104,9 @@ class Main extends PluginBase implements Listener {
         // Load debug mode setting
         $this->debug = (bool) $this->config->getNested("advanced.debug", false);
         
+        // Setup SSL certificate (like reference code)
+        $this->setupSSLCertificate();
+        
         // Initialize components
         $this->initializeComponents();
         
@@ -120,9 +129,46 @@ class Main extends PluginBase implements Listener {
         // Save any pending data
         $this->conversationManager->saveAllConversations();
         
+        // Clean up SSL certificate resource
+        if (isset($this->_cainfo_resource)) {
+            fclose($this->_cainfo_resource);
+            unset($this->_cainfo_resource);
+        }
+        
         $this->getLogger()->info(TextFormat::RED . "AI Assistant plugin has been disabled!");
     }
 
+    /**
+     * Setup SSL certificate for secure HTTPS requests (like reference code)
+     */
+    private function setupSSLCertificate(): void {
+        try {
+            // Read cacert.pem from resources
+            $resource = $this->getResource("cacert.pem");
+            if ($resource === null) {
+                throw new \RuntimeException("cacert.pem resource not found");
+            }
+            
+            $contents = stream_get_contents($resource);
+            fclose($resource);
+            
+            // Create temporary file for CA certificate
+            $resource = tmpfile();
+            if ($resource === false) {
+                throw new \RuntimeException("Failed to create temporary file for CA certificate");
+            }
+            
+            fwrite($resource, $contents);
+            $this->cainfo_path = stream_get_meta_data($resource)["uri"];
+            $this->_cainfo_resource = $resource;
+            
+            $this->getLogger()->info("SSL certificate loaded successfully");
+        } catch (\Exception $e) {
+            $this->getLogger()->error("Failed to setup SSL certificate: " . $e->getMessage());
+            $this->getLogger()->warning("HTTPS requests may fail without proper SSL setup");
+        }
+    }
+    
     /**
      * Initialize all plugin components
      */
@@ -369,9 +415,11 @@ class Main extends PluginBase implements Listener {
         // Replace color placeholders with actual color codes
         $buttonColors = $this->formsConfig->getNested("general.button_colors", []);
         foreach ($buttonColors as $colorName => $colorCode) {
-            $text = str_replace("{{$colorName}}", $colorCode, $text);
+            $text = str_replace("{{$colorName}}", (string)$colorCode, $text);
         }
         
         return TextFormat::colorize($text);
     }
+    
+    // Removed callback handling methods - using simpler synchronous approach now
 }

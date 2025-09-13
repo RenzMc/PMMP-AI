@@ -38,6 +38,69 @@ class LocalAIProvider implements AIProvider {
     }
 
     /**
+     * Build HTTP request configuration for async processing
+     * 
+     * @param string $query The user's query
+     * @param array $conversationHistory Previous conversation history
+     * @param string $systemPrompt The system prompt to use
+     * @param string $serverInfo Additional server information
+     * @param string $serverFeatures Relevant server features for the query
+     * @return array HTTP request configuration array
+     */
+    public function buildHttpRequest(string $query, array $conversationHistory, string $systemPrompt, string $serverInfo, string $serverFeatures = ""): array {
+        if (!$this->isConfigured()) {
+            throw new \Exception("Local AI is not properly configured. Please check your endpoint.");
+        }
+
+        // Prepare the prompt for local AI
+        $fullPrompt = $systemPrompt;
+        if (!empty($serverInfo)) {
+            $fullPrompt .= "\n\nServer Information:\n" . $serverInfo;
+        }
+        if (!empty($serverFeatures)) {
+            $fullPrompt .= "\n\n" . $serverFeatures;
+        }
+        
+        // Add conversation history (limited to the configured maximum)
+        $maxHistory = $this->plugin->getConfig()->getNested("prompts.max_conversation_history", 10);
+        $historyCount = count($conversationHistory);
+        
+        if ($historyCount > 0) {
+            $startIndex = max(0, $historyCount - $maxHistory);
+            
+            $fullPrompt .= "\n\nConversation History:";
+            for ($i = $startIndex; $i < $historyCount; $i++) {
+                $fullPrompt .= "\nUser: " . $conversationHistory[$i]["query"];
+                $fullPrompt .= "\nAssistant: " . $conversationHistory[$i]["response"];
+            }
+        }
+        
+        // Add the current query
+        $fullPrompt .= "\n\nUser: " . $query;
+        $fullPrompt .= "\nAssistant:";
+        
+        // Prepare the request data for Local AI
+        $requestData = [
+            "prompt" => $fullPrompt,
+            "model" => $this->model,
+            "temperature" => $this->temperature,
+            "max_tokens" => $this->maxTokens,
+            "stop" => ["User:", "\nUser:"]
+        ];
+        
+        // Return complete HTTP request configuration
+        return [
+            "url" => $this->endpoint,
+            "method" => "POST",
+            "headers" => [
+                "Content-Type: application/json"
+            ],
+            "data" => $requestData,
+            "timeout" => $this->timeout
+        ];
+    }
+
+    /**
      * Load configuration for this provider
      */
     private function loadConfig(): void {
@@ -71,7 +134,9 @@ class LocalAIProvider implements AIProvider {
         try {
             // Check if the request has been cancelled
             $requestManager = $this->plugin->getProviderManager()->getRequestManager();
-            $playerName = $this->plugin->getServer()->getOnlinePlayers()[0]->getName() ?? "SYSTEM";
+            // Get player name from current context - will be passed properly in future versions
+            $onlinePlayers = $this->plugin->getServer()->getOnlinePlayers();
+            $playerName = count($onlinePlayers) > 0 ? array_values($onlinePlayers)[0]->getName() : "SYSTEM";
             $activeRequest = $requestManager->getActiveRequest($playerName);
             
             if ($activeRequest !== null && isset($activeRequest['id'])) {
@@ -148,6 +213,95 @@ class LocalAIProvider implements AIProvider {
         } catch (\Exception $e) {
             $this->plugin->getLogger()->error("Local AI error: " . $e->getMessage());
             return MinecraftTextFormatter::COLOR_RED . "An error occurred while communicating with the AI service. Please try again later.";
+        }
+    }
+
+    /**
+     * Parse HTTP response from Local AI API into clean response text
+     * 
+     * @param string $httpResponse Raw HTTP response body
+     * @param array $result Complete result array from HttpRequestTask
+     * @return array Parsed response array with 'success', 'content', and 'error' keys
+     */
+    public function parseResponse(string $httpResponse, array $result = []): array {
+        try {
+            // Check for HTTP errors first
+            if (isset($result['error'])) {
+                return [
+                    'success' => false,
+                    'content' => '',
+                    'error' => 'Local AI API error: ' . $result['error']
+                ];
+            }
+            
+            if (empty($httpResponse)) {
+                return [
+                    'success' => false,
+                    'content' => '',
+                    'error' => 'Empty response from Local AI API'
+                ];
+            }
+
+            // Parse the JSON response
+            $responseData = json_decode($httpResponse, true);
+
+            if ($responseData === null) {
+                return [
+                    'success' => false,
+                    'content' => '',
+                    'error' => 'Invalid JSON response from Local AI: ' . json_last_error_msg()
+                ];
+            }
+
+            // Extract the response text from Local AI completion format
+            if (isset($responseData["choices"][0]["text"])) {
+                $aiResponse = trim($responseData["choices"][0]["text"]);
+                
+                // Trim the response if it's too long
+                $maxLength = $this->plugin->getConfig()->getNested("advanced.max_response_length", 1000);
+                if (strlen($aiResponse) > $maxLength) {
+                    $aiResponse = substr($aiResponse, 0, $maxLength) . "...";
+                }
+                
+                // Check if the response already has Minecraft formatting
+                if (!str_contains($aiResponse, "§")) {
+                    // Convert any markdown formatting to Minecraft formatting
+                    $aiResponse = MinecraftTextFormatter::formatText($aiResponse);
+                }
+                
+                return [
+                    'success' => true,
+                    'content' => $aiResponse,
+                    'error' => ''
+                ];
+            }
+
+            // Handle error responses from Local AI API
+            if (isset($responseData["error"])) {
+                $errorMsg = is_array($responseData["error"]) ? 
+                    json_encode($responseData["error"]) : 
+                    (string)$responseData["error"];
+                
+                return [
+                    'success' => false,
+                    'content' => '',
+                    'error' => 'Local AI error: ' . $errorMsg
+                ];
+            }
+
+            // If no choices or errors found, return generic error
+            return [
+                'success' => false,
+                'content' => '',
+                'error' => 'Local AI: Unexpected response format - no choices found'
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'content' => '',
+                'error' => 'Local AI parsing error: ' . $e->getMessage()
+            ];
         }
     }
 

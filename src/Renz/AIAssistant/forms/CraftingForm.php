@@ -46,9 +46,9 @@ class CraftingForm {
             }
             
             // Check if player has enough tokens
-            if ($this->plugin->getConfig()->getNested("tokens.enabled", true)) {
-                $tokenManager = $this->plugin->getTokenManager();
-                if (!$tokenManager->hasTokens($player->getName())) {
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled()) {
+                if (!$tokenManager->canUseToken($player)) {
                     $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
                     $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
                     
@@ -62,7 +62,7 @@ class CraftingForm {
             // Check if player already has an active request
             $requestManager = $this->plugin->getProviderManager()->getRequestManager();
             if ($requestManager->hasActiveRequest($player->getName())) {
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.request_already_active");
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
                 $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
                 return;
             }
@@ -70,62 +70,26 @@ class CraftingForm {
             // Create the query
             $query = "How to craft " . $item . " in Minecraft";
             
-            // Show loading form
-            $loadingTitle = $this->plugin->getMessageManager()->getConfigurableMessage("loading.titles.crafting_lookup");
-            $loadingForm = new LoadingForm($this->plugin, $player, $query, $loadingTitle);
-            $loadingForm->show(function() use ($player) {
-                // This is called when the loading form is cancelled
-                $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.crafting_lookup_cancelled");
+            // Send processing notification
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
+            
+            // Store form context for async response
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'crafting_form',
+                'question' => $query,
+                'item' => $item,
+                'tokenManager' => $this->plugin->getTokenManager()
+            ]);
+            
+            // Process the query with async handling
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $query);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("CraftingForm processQuery error: " . $e->getMessage());
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
                 $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
-            });
-            
-            // Send toast notification
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "looking_up", ["item" => $item]);
-            
-            // Process the crafting query in a separate task
-            $this->plugin->getScheduler()->scheduleTask(new ClosureTask(
-                function() use ($player, $item, $query, $loadingForm): void {
-                    // Check if the player is still online
-                    if (!$player->isOnline()) {
-                        $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
-                        return;
-                    }
-                    
-                    // Check if the loading form was cancelled
-                    if ($loadingForm->isCancelled()) {
-                        return;
-                    }
-                    
-                    // Process the query
-                    $response = $this->plugin->getProviderManager()->processQuery($player, $query);
-                    
-                    // Check if the player is still online
-                    if (!$player->isOnline()) {
-                        return;
-                    }
-                    
-                    // Check if the loading form was cancelled
-                    if ($loadingForm->isCancelled()) {
-                        return;
-                    }
-                    
-                    // Deduct token if enabled
-                    if ($this->plugin->getConfig()->getNested("tokens.enabled", true)) {
-                        $this->plugin->getTokenManager()->useToken($player->getName());
-                    }
-                    
-                    // Cancel the loading form
-                    $loadingForm->cancel();
-                    
-                    // Send toast notification
-                    $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "recipe_found");
-                    
-                    // Show the response
-                    $form = new ResponseForm($this->plugin);
-                    $form->sendTo($player, $query, $response);
-                }
-            ));
+                return;
+            }
         });
         
         // Get form title and content from forms config

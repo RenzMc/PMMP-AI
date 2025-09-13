@@ -82,7 +82,7 @@ class MessageManager {
         
         // Apply replacements
         foreach ($replacements as $key => $value) {
-            $message = str_replace('{' . $key . '}', $value, $message);
+            $message = str_replace('{' . $key . '}', (string)$value, $message);
         }
         
         return TextFormat::colorize($message);
@@ -281,8 +281,8 @@ class MessageManager {
         
         // Apply replacements
         foreach ($replacements as $key => $value) {
-            $title = str_replace("{" . $key . "}", $value, $title);
-            $body = str_replace("{" . $key . "}", $value, $body);
+            $title = str_replace("{" . $key . "}", (string)$value, $title);
+            $body = str_replace("{" . $key . "}", (string)$value, $body);
         }
         
         // Send the toast notification

@@ -16,6 +16,12 @@ class RequestManager {
     
     /** @var array */
     private array $cancelledRequests = [];
+    
+    /** @var array */
+    private array $pendingRequests = [];
+    
+    /** @var array */
+    private array $formContexts = [];
 
     /**
      * RequestManager constructor.
@@ -150,5 +156,67 @@ class RequestManager {
                 unset($this->cancelledRequests[$requestId]);
             }
         }
+    }
+    
+    /**
+     * Store pending request data for async callback
+     * 
+     * @param string $requestId
+     * @param array $data
+     * @return void
+     */
+    public function setPendingRequest(string $requestId, array $data): void {
+        $this->pendingRequests[$requestId] = $data;
+    }
+    
+    /**
+     * Get pending request data for async callback
+     * 
+     * @param string $requestId
+     * @return array|null
+     */
+    public function getPendingRequest(string $requestId): ?array {
+        return $this->pendingRequests[$requestId] ?? null;
+    }
+    
+    /**
+     * Remove pending request data after processing
+     * 
+     * @param string $requestId
+     * @return void
+     */
+    public function removePendingRequest(string $requestId): void {
+        unset($this->pendingRequests[$requestId]);
+    }
+
+    /**
+     * Set form context for a player request
+     * 
+     * @param string $playerName
+     * @param array $context
+     * @return void
+     */
+    public function setFormContext(string $playerName, array $context): void {
+        $this->formContexts[$playerName] = $context;
+    }
+
+    /**
+     * Get form context for a player
+     * 
+     * @param string $playerName
+     * @return array|null
+     */
+    public function getFormContext(string $playerName): ?array {
+        return $this->formContexts[$playerName] ?? null;
+    }
+
+    /**
+     * Clear form context for a player
+     * 
+     * @param string $playerName
+     * @return void
+     */
+    public function clearFormContext(string $playerName): void {
+        unset($this->formContexts[$playerName]);
     }
 }

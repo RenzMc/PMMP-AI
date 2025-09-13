@@ -61,15 +61,3 @@ class AIBroadcastTask extends Task {
         }
         
         // Get a random tip
-        $tip = $this->tips[array_rand($this->tips)];
-        
-        // Broadcast the tip to all players
-        $this->plugin->getServer()->broadcastMessage(
-            TextFormat::colorize("&b" . $this->prefix . "&e" . $tip)
-        );
-        
-        if ($this->plugin->isDebugEnabled()) {
-            $this->plugin->getLogger()->debug("Broadcasted tip: " . $tip);
-        }
-    }
-}

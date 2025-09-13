@@ -14,7 +14,7 @@ use Renz\AIAssistant\forms\MainForm;
 class AICommand extends Command {
     /** @var Main */
     private Main $plugin;
-
+    
     /**
      * AICommand constructor.
      * 
@@ -26,7 +26,7 @@ class AICommand extends Command {
         $this->setPermission("aiassistant.command.ai");
         $this->plugin = $plugin;
     }
-
+    
     /**
      * Execute the command
      * 
@@ -51,16 +51,16 @@ class AICommand extends Command {
             switch (strtolower($args[0])) {
                 case "help":
                     return $this->showHelp($sender);
-                
+                    
                 case "clear":
                     return $this->clearConversation($sender);
-                    
+                        
                 case "setup":
                     return $this->handleSetupCommand($sender, array_slice($args, 1));
-                    
+                        
                 case "provider":
                     return $this->handleProviderCommand($sender, array_slice($args, 1));
-                
+                    
                 default:
                     // If no recognized subcommand, treat the entire args as a direct query
                     $query = implode(" ", $args);
@@ -72,7 +72,7 @@ class AICommand extends Command {
         $this->openMainForm($sender);
         return true;
     }
-
+    
     /**
      * Show help information
      * 
@@ -94,9 +94,9 @@ class AICommand extends Command {
         
         return true;
     }
-
+    
     /**
-     * Handle setup command
+     * Handle setup command with 3 arguments: provider, apikey, model
      * 
      * @param Player $player
      * @param array $args
@@ -119,46 +119,96 @@ class AICommand extends Command {
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_google");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_local");
             $player->sendMessage("");
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.usage_format");
+            $player->sendMessage(TextFormat::YELLOW . "Usage: /ai setup <provider> <api_key> <model>");
+            $player->sendMessage(TextFormat::GRAY . "Example: /ai setup openai sk-xxx gpt-4");
+            $player->sendMessage(TextFormat::GRAY . "Note: Anthropic and Local providers accept any model name");
             return true;
         }
         
-        if (count($args) < 2) {
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.missing_args");
+        if (count($args) < 3) {
+            $player->sendMessage(TextFormat::RED . "Missing arguments! Usage: /ai setup <provider> <api_key> <model>");
+            $player->sendMessage(TextFormat::GRAY . "Example: /ai setup openai sk-xxx gpt-4");
             return false;
         }
         
         $providerName = strtolower($args[0]);
         $apiKey = $args[1];
+        $modelName = $args[2];
         
-        // Map provider names and models
-        $providers = [
-            "openai" => "gpt-3.5-turbo",
-            "openrouter" => "openai/gpt-3.5-turbo", 
-            "anthropic" => "claude-3-haiku-20240307",
-            "google" => "gemini-pro",
-            "local" => "local-model"
-        ];
+        // Supported providers
+        $supportedProviders = ["openai", "openrouter", "anthropic", "google", "local"];
         
-        if (!isset($providers[$providerName])) {
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.invalid_provider");
+        if (!in_array($providerName, $supportedProviders)) {
+            $player->sendMessage(TextFormat::RED . "Invalid provider! Supported providers: " . implode(", ", $supportedProviders));
             return false;
         }
         
-        // Configure provider
+        // Skip all validation - direct setup to config
+        $player->sendMessage(TextFormat::YELLOW . "Setting up provider directly...");
+        $this->setupProviderDirectly($player, $providerName, $apiKey, $modelName);
+        return true;
+    }
+    
+    /**
+     * Setup provider directly without validation (for Anthropic and Local)
+     * 
+     * @param Player $player
+     * @param string $providerName
+     * @param string $apiKey
+     * @param string $modelName
+     */
+    private function setupProviderDirectly(Player $player, string $providerName, string $apiKey, string $modelName): void {
+        // Save configuration directly
         $config = $this->plugin->getConfig();
         $config->setNested("api_providers.{$providerName}.enabled", true);
         $config->setNested("api_providers.{$providerName}.api_key", $apiKey);
-        $config->setNested("api_providers.{$providerName}.model", $providers[$providerName]);
+        $config->setNested("api_providers.{$providerName}.model", $modelName);
         $config->setNested("api_providers.default_provider", $providerName);
         $config->save();
         
         // Reload providers
         $this->plugin->getProviderManager()->reloadProviders();
         
-        $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.setup_complete", ["provider" => $providerName]);
-        return true;
+        $player->sendMessage(TextFormat::GREEN . "✓ Successfully configured {$providerName} with model {$modelName}!");
+        $player->sendMessage(TextFormat::GRAY . "Provider has been set as default.");
+        
+        // Add usage hints for each provider
+        switch ($providerName) {
+            case 'anthropic':
+                $player->sendMessage(TextFormat::GRAY . "Note: Use models like claude-3-5-sonnet-20241022, claude-3-opus-20240229");
+                break;
+            case 'local':
+                $player->sendMessage(TextFormat::GRAY . "Note: Make sure your local endpoint is configured properly");
+                break;
+            case 'openai':
+                $player->sendMessage(TextFormat::GRAY . "Note: Use models like gpt-4, gpt-3.5-turbo");
+                break;
+            case 'openrouter':
+                $player->sendMessage(TextFormat::GRAY . "Note: Use models like openai/gpt-4, anthropic/claude-3-5-sonnet");
+                break;
+            case 'google':
+                $player->sendMessage(TextFormat::GRAY . "Note: Use models like gemini-pro, gemini-1.5-flash");
+                break;
+        }
     }
+    
+    // Removed - no more validation, direct setup only
+    
+    // Removed model fetching function - validation disabled
+    
+    // Removed provider headers function - validation disabled
+    
+    // Removed model parsing function - validation disabled
+    
+    // Removed - no more API testing
+    
+    // Removed - no more OpenRouter testing
+    
+    // Removed - no more OpenAI testing
+    
+    // Removed - no more Anthropic testing
+    
+    // Removed - no more Google testing
 
     /**
      * Clear the player's conversation history
@@ -171,7 +221,7 @@ class AICommand extends Command {
         $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.conversation_cleared");
         return true;
     }
-
+    
     /**
      * Handle provider-related commands
      * 
@@ -209,7 +259,7 @@ class AICommand extends Command {
                     }
                 }
                 return true;
-            
+                
             case "set":
                 if (!isset($args[1])) {
                     $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.provider_set_usage");
@@ -226,13 +276,13 @@ class AICommand extends Command {
                 $providerManager->setDefaultProvider($providerName);
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.provider_set_success", ["provider" => $providerName]);
                 return true;
-            
+                
             default:
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.provider_usage");
                 return false;
         }
     }
-
+    
     /**
      * Process a direct query
      * 
@@ -248,22 +298,131 @@ class AICommand extends Command {
             return false;
         }
         
-        $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.processing_query");
-        
-        // Use token if token system is enabled
-        if ($tokenManager->isEnabled()) {
-            $tokenManager->useToken($player);
+        // Check if player already has an active request
+        $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+        if ($requestManager->hasActiveRequest($player->getName())) {
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
+            return false;
         }
         
-        // Process the query
-        $response = $this->plugin->getProviderManager()->processQuery($player, $query);
+        $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.processing_query");
         
-        // Send the response
-        $player->sendMessage($this->plugin->getMessageManager()->formatAIResponse($response));
+        try {
+            // Store command context so async callbacks know this came from a command
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'direct_command',
+                'query' => $query,
+                'tokenManager' => $tokenManager,
+                'player' => $player->getName() // Store player name for safety
+            ]);
+            
+            // Process the query asynchronously
+            $response = $this->plugin->getProviderManager()->processQuery($player, $query);
+            
+            // Check if this is a processing message (async) or actual response (sync/cached)
+            $isProcessingMessage = strpos($response, 'Processing your') !== false || 
+                                 strpos($response, 'Processing') !== false || 
+                                 strpos($response, 'Please wait') !== false;
+            
+            if (!$isProcessingMessage) {
+                // This is a synchronous response (cached or fallback) - send it immediately
+                $this->handleDirectQueryResponse($player, $query, $response, $tokenManager);
+            }
+            // For async responses, the callback will be handled by AIProviderManager->handleProviderAsyncResponse
+            // which will call our handleDirectQueryCallback method
+            
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error in processDirectQuery for player " . $player->getName() . ": " . $e->getMessage());
+            $this->plugin->getLogger()->error("Stack trace: " . $e->getTraceAsString());
+            
+            // Send error message using configurable messages
+            $errorMessage = $this->getErrorMessage($e);
+            $player->sendMessage($errorMessage);
+            
+            // Clean up request
+            $requestManager->completeRequest($player->getName(), '');
+            return false;
+        }
         
         return true;
     }
-
+    
+    /**
+     * Handle direct query response (for both sync and async responses)
+     * 
+     * @param Player $player
+     * @param string $query
+     * @param string $response
+     * @param TokenManager $tokenManager
+     */
+    public function handleDirectQueryResponse(Player $player, string $query, string $response, $tokenManager): void {
+        // Ensure we have a valid response
+        if (empty($response) || trim($response) === "") {
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("forms.generation_failed"));
+            $this->plugin->getLogger()->warning("Empty AI response for player " . $player->getName() . " with query: " . $query);
+            return;
+        }
+        
+        // Format and send the response to chat
+        $formattedResponse = $this->plugin->getMessageManager()->formatAIResponse($response);
+        
+        // Send response with proper formatting
+        if (!empty($formattedResponse)) {
+            $player->sendMessage($formattedResponse);
+            
+            // Use token if token system is enabled (only after successful response)
+            if ($tokenManager->isEnabled()) {
+                $tokenManager->useToken($player);
+            }
+            
+            // Also send success notification
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.response_sent");
+            
+            // Add to conversation history
+            $this->plugin->getConversationManager()->addToConversation($player->getName(), $query, $response);
+        } else {
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("forms.generation_failed"));
+        }
+    }
+    
+    /**
+     * Get appropriate error message based on exception type
+     * 
+     * @param \Throwable $e
+     * @return string
+     */
+    private function getErrorMessage(\Throwable $e): string {
+        $errorMsg = $e->getMessage();
+        
+        // Check for specific error types and return appropriate configured messages
+        if (strpos($errorMsg, 'timeout') !== false || strpos($errorMsg, 'timed out') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_timeout_error");
+        }
+        
+        if (strpos($errorMsg, 'connection') !== false || strpos($errorMsg, 'connect') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_connection_error");
+        }
+        
+        if (strpos($errorMsg, 'rate limit') !== false || strpos($errorMsg, 'too many') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_rate_limit_error");
+        }
+        
+        if (strpos($errorMsg, 'quota') !== false || strpos($errorMsg, 'exceeded') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_quota_exceeded");
+        }
+        
+        if (strpos($errorMsg, 'invalid') !== false || strpos($errorMsg, 'parse') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_invalid_response");
+        }
+        
+        if (strpos($errorMsg, 'unavailable') !== false || strpos($errorMsg, 'service') !== false) {
+            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_service_unavailable");
+        }
+        
+        // Default error message
+        return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_unknown_error");
+    }
+    
     /**
      * Open the main form
      * 
@@ -273,4 +432,5 @@ class AICommand extends Command {
         $form = new MainForm($this->plugin);
         $form->sendTo($player);
     }
+    
 }
