@@ -47,25 +47,14 @@ class AICommand extends Command {
 
         // Check if there are arguments
         if (count($args) > 0) {
-            // Handle subcommands
-            switch (strtolower($args[0])) {
-                case "help":
-                    return $this->showHelp($sender);
-                    
-                case "clear":
-                    return $this->clearConversation($sender);
-                        
-                case "setup":
-                    return $this->handleSetupCommand($sender, array_slice($args, 1));
-                        
-                case "provider":
-                    return $this->handleProviderCommand($sender, array_slice($args, 1));
-                    
-                default:
-                    // If no recognized subcommand, treat the entire args as a direct query
-                    $query = implode(" ", $args);
-                    return $this->processDirectQuery($sender, $query);
-            }
+            // Handle subcommands using match
+            return match (strtolower($args[0])) {
+                "help" => $this->showHelp($sender),
+                "clear" => $this->clearConversation($sender),
+                "setup" => $this->handleSetupCommand($sender, array_slice($args, 1)),
+                "provider" => $this->handleProviderCommand($sender, array_slice($args, 1)),
+                default => $this->processDirectQuery($sender, implode(" ", $args))
+            };
         }
 
         // No arguments, open the main form
@@ -172,44 +161,17 @@ class AICommand extends Command {
         $player->sendMessage(TextFormat::GREEN . "✓ Successfully configured {$providerName} with model {$modelName}!");
         $player->sendMessage(TextFormat::GRAY . "Provider has been set as default.");
         
-        // Add usage hints for each provider
-        switch ($providerName) {
-            case 'anthropic':
-                $player->sendMessage(TextFormat::GRAY . "Note: Use models like claude-3-5-sonnet-20241022, claude-3-opus-20240229");
-                break;
-            case 'local':
-                $player->sendMessage(TextFormat::GRAY . "Note: Make sure your local endpoint is configured properly");
-                break;
-            case 'openai':
-                $player->sendMessage(TextFormat::GRAY . "Note: Use models like gpt-4, gpt-3.5-turbo");
-                break;
-            case 'openrouter':
-                $player->sendMessage(TextFormat::GRAY . "Note: Use models like openai/gpt-4, anthropic/claude-3-5-sonnet");
-                break;
-            case 'google':
-                $player->sendMessage(TextFormat::GRAY . "Note: Use models like gemini-pro, gemini-1.5-flash");
-                break;
-        }
+        // Add usage hints for each provider using match
+        match ($providerName) {
+            'anthropic' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like claude-3-5-sonnet-20241022, claude-3-opus-20240229"),
+            'local' => $player->sendMessage(TextFormat::GRAY . "Note: Make sure your local endpoint is configured properly"),
+            'openai' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like gpt-4, gpt-3.5-turbo"),
+            'openrouter' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like openai/gpt-4, anthropic/claude-3-5-sonnet"),
+            'google' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like gemini-pro, gemini-1.5-flash"),
+            default => null
+        };
     }
     
-    // Removed - no more validation, direct setup only
-    
-    // Removed model fetching function - validation disabled
-    
-    // Removed provider headers function - validation disabled
-    
-    // Removed model parsing function - validation disabled
-    
-    // Removed - no more API testing
-    
-    // Removed - no more OpenRouter testing
-    
-    // Removed - no more OpenAI testing
-    
-    // Removed - no more Anthropic testing
-    
-    // Removed - no more Google testing
-
     /**
      * Clear the player's conversation history
      * 
@@ -242,8 +204,8 @@ class AICommand extends Command {
         
         $providerManager = $this->plugin->getProviderManager();
         
-        switch (strtolower($args[0])) {
-            case "list":
+        return match (strtolower($args[0])) {
+            "list" => (function() use ($player, $providerManager) {
                 $providers = $providerManager->getAvailableProviders();
                 $defaultProvider = $providerManager->getDefaultProvider();
                 
@@ -259,8 +221,9 @@ class AICommand extends Command {
                     }
                 }
                 return true;
-                
-            case "set":
+            })(),
+            
+            "set" => (function() use ($player, $args, $providerManager) {
                 if (!isset($args[1])) {
                     $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.provider_set_usage");
                     return false;
@@ -276,11 +239,13 @@ class AICommand extends Command {
                 $providerManager->setDefaultProvider($providerName);
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.provider_set_success", ["provider" => $providerName]);
                 return true;
-                
-            default:
+            })(),
+            
+            default => (function() use ($player) {
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.provider_usage");
                 return false;
-        }
+            })()
+        };
     }
     
     /**
@@ -394,33 +359,28 @@ class AICommand extends Command {
     private function getErrorMessage(\Throwable $e): string {
         $errorMsg = $e->getMessage();
         
-        // Check for specific error types and return appropriate configured messages
-        if (strpos($errorMsg, 'timeout') !== false || strpos($errorMsg, 'timed out') !== false) {
-            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_timeout_error");
-        }
-        
-        if (strpos($errorMsg, 'connection') !== false || strpos($errorMsg, 'connect') !== false) {
-            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_connection_error");
-        }
-        
-        if (strpos($errorMsg, 'rate limit') !== false || strpos($errorMsg, 'too many') !== false) {
-            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_rate_limit_error");
-        }
-        
-        if (strpos($errorMsg, 'quota') !== false || strpos($errorMsg, 'exceeded') !== false) {
-            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_quota_exceeded");
-        }
-        
-        if (strpos($errorMsg, 'invalid') !== false || strpos($errorMsg, 'parse') !== false) {
-            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_invalid_response");
-        }
-        
-        if (strpos($errorMsg, 'unavailable') !== false || strpos($errorMsg, 'service') !== false) {
-            return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_service_unavailable");
-        }
-        
-        // Default error message
-        return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_unknown_error");
+        // Check for specific error types and return appropriate configured messages using match
+        return match (true) {
+            strpos($errorMsg, 'timeout') !== false || strpos($errorMsg, 'timed out') !== false 
+                => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_timeout_error"),
+            
+            strpos($errorMsg, 'connection') !== false || strpos($errorMsg, 'connect') !== false 
+                => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_connection_error"),
+            
+            strpos($errorMsg, 'rate limit') !== false || strpos($errorMsg, 'too many') !== false 
+                => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_rate_limit_error"),
+            
+            strpos($errorMsg, 'quota') !== false || strpos($errorMsg, 'exceeded') !== false 
+                => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_quota_exceeded"),
+            
+            strpos($errorMsg, 'invalid') !== false || strpos($errorMsg, 'parse') !== false 
+                => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_invalid_response"),
+            
+            strpos($errorMsg, 'unavailable') !== false || strpos($errorMsg, 'service') !== false 
+                => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_service_unavailable"),
+            
+            default => $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_unknown_error")
+        };
     }
     
     /**

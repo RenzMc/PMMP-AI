@@ -121,11 +121,47 @@ class AIMainForm {
                 return;
             }
             
-            // Process the question and get a response
-            $response = $this->plugin->getProviderManager()->getDefaultProvider()->processQuery($player, $question);
+            // Check if player has enough tokens
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled()) {
+                if (!$tokenManager->canUseToken($player)) {
+                    $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
+                    $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
+                    
+                    // Open token shop form
+                    $form = new TokenShopForm($this->plugin);
+                    $form->sendTo($player);
+                    return;
+                }
+            }
             
-            // Show the response
-            $this->showResponseForm($player, $question, $response);
+            // Check if player already has an active request
+            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+            if ($requestManager->hasActiveRequest($player->getName())) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
+                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
+                return;
+            }
+            
+            // Send processing notification
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
+            
+            // Store form context for async response
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'chat_form',
+                'question' => $question,
+                'tokenManager' => $this->plugin->getTokenManager()
+            ]);
+            
+            // Process the query with async handling
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $question);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Chat processQuery error: " . $e->getMessage());
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
+                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
+                return;
+            }
         });
         
         // Get form title and content from forms config
@@ -165,11 +201,51 @@ class AIMainForm {
                 return;
             }
             
-            // Process the crafting query
-            $response = $this->plugin->getProviderManager()->getDefaultProvider()->processQuery($player, "How to craft " . $item);
+            // Check if player has enough tokens
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled()) {
+                if (!$tokenManager->canUseToken($player)) {
+                    $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
+                    $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
+                    
+                    // Open token shop form
+                    $form = new TokenShopForm($this->plugin);
+                    $form->sendTo($player);
+                    return;
+                }
+            }
             
-            // Show the response
-            $this->showResponseForm($player, "How to craft " . $item, $response);
+            // Check if player already has an active request
+            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+            if ($requestManager->hasActiveRequest($player->getName())) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
+                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
+                return;
+            }
+            
+            // Create the query
+            $query = "How to craft " . $item . " in Minecraft";
+            
+            // Send processing notification
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
+            
+            // Store form context for async response
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'crafting_form',
+                'question' => $query,
+                'item' => $item,
+                'tokenManager' => $this->plugin->getTokenManager()
+            ]);
+            
+            // Process the query with async handling
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $query);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Crafting Helper processQuery error: " . $e->getMessage());
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
+                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
+                return;
+            }
         });
         
         // Get form title and content from forms config
@@ -190,6 +266,9 @@ class AIMainForm {
         $form->addInput("", $placeholder);
         
         $form->sendToPlayer($player);
+        
+        // Send toast notification when form is opened
+        $this->plugin->getMessageManager()->sendToastNotification($player, "info", $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title"), $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body"));
     }
 
     /**
@@ -208,15 +287,55 @@ class AIMainForm {
             $height = (int) ($data[3] ?? 5);
             
             // Get building styles from config
-            $styles = $this->plugin->getFormSetting("building_calculator_form.fields.style.options", ["Modern", "Medieval", "Futuristic"]);
+            $styles = $this->plugin->getFormSetting("building_calculator_form.fields.style.options", ["Modern", "Medieval", "Futuristic", "Rustic", "Industrial"]);
             $style = $styles[$data[4] ?? 0];
             
-            // Process the building calculation query
-            $query = "Calculate materials for a {$length}x{$width}x{$height} {$style} house";
-            $response = $this->plugin->getProviderManager()->getDefaultProvider()->processQuery($player, $query);
+            // Check if player has enough tokens
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled()) {
+                if (!$tokenManager->canUseToken($player)) {
+                    $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
+                    $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
+                    
+                    // Open token shop form
+                    $form = new TokenShopForm($this->plugin);
+                    $form->sendTo($player);
+                    return;
+                }
+            }
             
-            // Show the response
-            $this->showResponseForm($player, $query, $response);
+            // Check if player already has an active request
+            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+            if ($requestManager->hasActiveRequest($player->getName())) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
+                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
+                return;
+            }
+            
+            // Create the query
+            $query = "Calculate materials for a {$length}x{$width}x{$height} {$style} house in Minecraft";
+            
+            // Send processing notification  
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
+            
+            // Store form context for async response
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'building_form',
+                'question' => $query,
+                'dimensions' => "{$length}x{$width}x{$height}",
+                'style' => $style,
+                'tokenManager' => $this->plugin->getTokenManager()
+            ]);
+            
+            // Process the query with async handling
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $query);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Building Calculator processQuery error: " . $e->getMessage());
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
+                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
+                return;
+            }
         });
         
         // Get form title and content from forms config
@@ -237,7 +356,7 @@ class AIMainForm {
         $heightPlaceholder = $this->plugin->getFormSetting("building_calculator_form.fields.height.placeholder", "5");
         
         $styleLabel = $this->plugin->getFormSetting("building_calculator_form.fields.style.label", "Building Style");
-        $styleOptions = $this->plugin->getFormSetting("building_calculator_form.fields.style.options", ["Modern", "Medieval", "Futuristic"]);
+        $styleOptions = $this->plugin->getFormSetting("building_calculator_form.fields.style.options", ["Modern", "Medieval", "Futuristic", "Rustic", "Industrial"]);
         
         // Format title with text formatting from config
         $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
@@ -255,6 +374,9 @@ class AIMainForm {
         $form->addDropdown(TextFormat::colorize("&f" . $styleLabel . ":"), $styleOptions);
         
         $form->sendToPlayer($player);
+        
+        // Send toast notification when form is opened
+        $this->plugin->getMessageManager()->sendToastNotification($player, "info", $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_title"), $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_body"));
     }
 
     /**
@@ -276,46 +398,7 @@ class AIMainForm {
      * @param string $response
      */
     private function showResponseForm(Player $player, string $question, string $response): void {
-        $form = new SimpleForm(function(Player $player, $data) {
-            if ($data === null) {
-                return;
-            }
-            
-            // Return to main form
-            $mainForm = new AIMainForm($this->plugin);
-            $mainForm->sendTo($player);
-        });
-        
-        // Get form title from forms config
-        $title = $this->plugin->getFormSetting("response_form.title", "AI Response");
-        
-        // Get question and response prefixes from forms config
-        $questionPrefix = $this->plugin->getFormSetting("response_form.question_prefix", "Question: ");
-        $responsePrefix = $this->plugin->getFormSetting("response_form.response_prefix", "Response: ");
-        
-        // Format title with text formatting from config
-        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
-        $title = $this->plugin->formatFormText($titleFormat . $title);
-        
-        // Format content with text formatting from config
-        $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
-        $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&f");
-        
-        $content = TextFormat::colorize($highlightFormat . $questionPrefix) . 
-                  TextFormat::colorize($contentFormat . $question . "\n\n") .
-                  TextFormat::colorize($highlightFormat . $responsePrefix) . 
-                  TextFormat::colorize($contentFormat . "\n" . $response);
-        
-        $form->setTitle($title);
-        $form->setContent($content);
-        
-        // Add back button from config
-        $backText = $this->plugin->getFormSetting("response_form.buttons.back.text", "Back to Main Menu");
-        $backColor = $this->plugin->getFormSetting("response_form.buttons.back.color", "&9");
-        $backTexture = $this->plugin->getFormSetting("response_form.buttons.back.texture", "textures/ui/arrow_left");
-        
-        $form->addButton($this->plugin->formatFormText($backColor . $backText), 0, $backTexture);
-        
-        $form->sendToPlayer($player);
+        $form = new ResponseForm($this->plugin);
+        $form->sendTo($player, $question, $response);
     }
 }
