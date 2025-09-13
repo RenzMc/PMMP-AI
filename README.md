@@ -20,14 +20,13 @@ PMMP-AI is a powerful AI assistant plugin for PocketMine-MP servers that integra
 - **Token System**: Optional economy integration with configurable token packages
 - **Chat History**: Save and review past conversations with the AI
 - **Fully Customizable**: Extensive configuration options for all aspects of the plugin
-- **Admin Settings**: Comprehensive settings panel for server administrators
 - **Broadcast System**: Configurable AI tips broadcast to players
 
 ## 📋 Requirements
 
 - PocketMine-MP 5.15.0+
 - [FormAPI](https://github.com/jojoe77777/FormAPI) plugin
-- Economy plugin (optional, for token system): EconomyAPI, BedrockEconomy, or CoinAPI
+- Economy plugin (optional, for token system): EconomyAPI, BedrockEconomy
 
 ## 📥 Installation
 
