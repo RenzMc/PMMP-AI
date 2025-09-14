@@ -102,7 +102,7 @@ messages:
     command_ingame_only: "§cThis command can only be used in-game."
     conversation_cleared: "§aYour conversation history has been cleared."
     no_permission_providers: "§cYou don't have permission to manage providers."
-    response_sent: "§a✅ Response sent to your chat!"
+    response_sent: "§a Response sent to your chat!"
     provider_usage: "§cUsage: /ai provider [list|set <name>]"
     provider_set_usage: "§cUsage: /ai provider set <name>"
     provider_not_available: "§cProvider '{provider}' is not available."
@@ -214,6 +214,16 @@ messages:
       new_question_title: "§l§bNew Question"
       new_question_body: "Ask another question"
       
+    # Session toasts
+    session:
+      new_session_title: "§l§bNew Session"
+      new_session_body: "Started a new conversation session"
+      
+    # Main Menu toasts
+    main_menu:
+      title: "§l§bMain Menu"
+      body: "Welcome to the AI Assistant"
+      
     # Specific toast presets for legacy sendSpecificToastNotification calls
     presets:
       no_tokens:
@@ -237,6 +247,15 @@ messages:
       recipe_found:
         title: "§l§aRecipe Found"
         body: "Crafting recipe retrieved successfully!"
+      calculation_complete:
+        title: "§l§aCalculation Complete"
+        body: "Building materials calculation is ready!"
+      purchase_complete:
+        title: "§l§aPurchase Complete"
+        body: "Successfully purchased {tokens} tokens!"
+      view_response_ready:
+        title: "§l§bView Response"
+        body: "Click 'View Response' in the main menu to see your AI answer!"
     
   # Setup messages
   setup:
@@ -254,6 +273,18 @@ messages:
     missing_args: "§cUsage: /ai setup <provider> <api_key>"
     setup_complete: "§aProvider {provider} configured successfully!"
     admin_only: "§cOnly administrators can access setup."
+    usage_example: "§7Example: /ai setup openai sk-xxx gpt-4"
+    note_anthropic_local: "§7Note: Anthropic and Local providers accept any model name"
+    missing_arguments: "§cMissing arguments! Usage: /ai setup <provider> <api_key> <model>"
+    invalid_provider_list: "§cInvalid provider! Supported providers: {providers}"
+    setting_up: "§eSetting up provider directly..."
+    config_success: "§a✓ Successfully configured {provider} with model {model}!"
+    provider_set_default: "§7Provider has been set as default."
+    note_anthropic: "§7Note: Use models like claude-3-5-sonnet-20241022, claude-3-opus-20240229"
+    note_local: "§7Note: Make sure your local endpoint is configured properly"
+    note_openai: "§7Note: Use models like gpt-4, gpt-3.5-turbo"
+    note_openrouter: "§7Note: Use models like openai/gpt-4, anthropic/claude-3-5-sonnet"
+    note_google: "§7Note: Use models like gemini-pro, gemini-1.5-flash"
     
   # Help messages
   help:
@@ -271,6 +302,20 @@ messages:
     list_header: "§a=== Available AI Providers ==="
     no_providers: "§cNo AI providers are available."
     default_marker: "§e (Default)"
+    
+  # Provider error messages
+  provider_errors:
+    anthropic_api_error: "§cERROR: Anthropic API error: {error}"
+    anthropic_empty_response: "§cERROR: Empty response from Anthropic API"
+    anthropic_generation_failed: "§cERROR: I couldn't generate a response. Please try again later."
+    anthropic_processing_error: "§cERROR: Error processing Anthropic response."
+    openai_api_error: "§cERROR: OpenAI API error: {error}"
+    openai_empty_response: "§cERROR: Empty response from OpenAI API"
+    openai_generation_failed: "§cERROR: I couldn't generate a response. Please try again later."
+    openai_processing_error: "§cERROR: Error processing OpenAI response."
+    openrouter_request_cancelled: "§eAI request was cancelled."
+    provider_not_available: "§cERROR: Provider '{provider}' not available for response parsing. Available: {available}"
+    generic_error: "§cERROR: {error}"
 
 # Toast Notification Settings
 notifications:
@@ -300,7 +345,6 @@ notifications:
     no_permission:
       title: "§l§cNo Permission"
       body: "§fYou don't have permission to do this."
-      
       
     request_cancelled:
       title: "§l§eRequest Cancelled"
@@ -341,6 +385,10 @@ notifications:
     request_active:
       title: "§l§eRequest Active"
       body: "§fPlease wait for your current AI request to complete"
+      
+    calculation_complete:
+      title: "§l§aCalculation Complete"
+      body: "§fBuilding materials calculation is ready!"
 
 # Server Information Settings
 server_info:
@@ -414,3 +462,8 @@ advanced:
   max_response_length: 1000
   # Whether to log all AI interactions
   log_interactions: true
+  # View Response button settings
+  view_response_button:
+    enabled: true
+    auto_show_delay: 3 # seconds to wait before auto-showing response
+    show_toast_notification: true

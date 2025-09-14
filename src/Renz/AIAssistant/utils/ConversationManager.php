@@ -208,8 +208,8 @@ class ConversationManager {
      * @return string The new session ID  
      */  
     public function createNewSession(string $playerName): string {  
-        // Generate a new session ID  
-        $sessionId = date("Ymd_His") . "_" . substr(md5(uniqid()), 0, 8);  
+        // Generate a new session ID with microseconds for better uniqueness
+        $sessionId = date("Ymd_His") . "_" . substr(md5(uniqid(microtime(true), true)), 0, 8);  
           
         // Initialize the sessions array for this player if it doesn't exist  
         if (!isset($this->sessions[$playerName])) {  
@@ -232,12 +232,13 @@ class ConversationManager {
           
         // Limit the number of sessions  
         if (count($this->sessions[$playerName]["sessions"]) > $this->maxSessions) {  
-            // Find the oldest session  
+            // Find the oldest session that's not the current one 
             $oldestSession = null;  
             $oldestTime = PHP_INT_MAX;  
               
             foreach ($this->sessions[$playerName]["sessions"] as $id => $session) {  
-                if ($session["last_used"] < $oldestTime) {  
+                // Don't delete the session we just created or the current session
+                if ($id !== $sessionId && $id !== $this->sessions[$playerName]["current"] && $session["last_used"] < $oldestTime) {  
                     $oldestTime = $session["last_used"];  
                     $oldestSession = $id;  
                 }  
@@ -247,11 +248,18 @@ class ConversationManager {
             if ($oldestSession !== null) {  
                 unset($this->sessions[$playerName]["sessions"][$oldestSession]);  
                   
-                // Also remove the conversation file  
+                // Also remove the conversation file with better error handling
                 $filePath = $this->getConversationFilePath($playerName, $oldestSession);  
                 if (file_exists($filePath)) {  
-                    @unlink($filePath);  
+                    if (!@unlink($filePath)) {
+                        $this->plugin->getLogger()->warning("Failed to delete old conversation file: {$filePath}");
+                    }
                 }  
+                
+                // Remove from memory if loaded
+                if (isset($this->conversations[$playerName][$oldestSession])) {
+                    unset($this->conversations[$playerName][$oldestSession]);
+                }
             }  
         }  
           
@@ -443,18 +451,18 @@ class ConversationManager {
             if (empty($this->sessions[$playerName]["sessions"])) {  
                 $this->sessions[$playerName]["current"] = "";  
             } else {  
-                // Find the most recently used session  
+                // Find the most recently used session (excluding the one being deleted)
                 $mostRecentSession = null;  
                 $mostRecentTime = 0;  
                   
                 foreach ($this->sessions[$playerName]["sessions"] as $id => $session) {  
-                    if ($session["last_used"] > $mostRecentTime) {  
+                    if ($id !== $sessionId && $session["last_used"] > $mostRecentTime) {  
                         $mostRecentTime = $session["last_used"];  
                         $mostRecentSession = $id;  
                     }  
                 }  
                   
-                $this->sessions[$playerName]["current"] = $mostRecentSession;  
+                $this->sessions[$playerName]["current"] = $mostRecentSession ?? "";  
             }  
         }  
           

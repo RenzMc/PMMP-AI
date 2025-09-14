@@ -59,6 +59,11 @@ main_form:
       text: "Settings"
       color: "{danger}"
       texture: "textures/ui/settings_icon"
+    view_response:
+      text: "View Response"
+      color: "{highlight}"
+      texture: "textures/ui/check"
+      enabled: true
 
 # Chat Form
 chat_form:
@@ -89,6 +94,27 @@ response_form:
       text: "Ask Another Question"
       color: "{primary}"
       texture: "textures/ui/chat_icon"
+    new_session:
+      text: "New Session"
+      color: "&e"
+      texture: "textures/ui/plus"
+    next_page:
+      text: "Next Page"
+      color: "&a"
+      texture: "textures/ui/arrow_right"
+    prev_page:
+      text: "Previous Page"
+      color: "&e"
+      texture: "textures/ui/arrow_left"
+    retry:
+      text: "Retry Question"
+      color: "&6"
+      texture: "textures/ui/refresh"
+    view_response:
+      text: "View Response"
+      color: "{highlight}"
+      texture: "textures/ui/check"
+      enabled: true
 
 # History Form
 history_form:

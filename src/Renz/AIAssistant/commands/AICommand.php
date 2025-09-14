@@ -108,15 +108,15 @@ class AICommand extends Command {
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_google");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_local");
             $player->sendMessage("");
-            $player->sendMessage(TextFormat::YELLOW . "Usage: /ai setup <provider> <api_key> <model>");
-            $player->sendMessage(TextFormat::GRAY . "Example: /ai setup openai sk-xxx gpt-4");
-            $player->sendMessage(TextFormat::GRAY . "Note: Anthropic and Local providers accept any model name");
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.usage_format");
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.usage_example");
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_anthropic_local");
             return true;
         }
         
         if (count($args) < 3) {
-            $player->sendMessage(TextFormat::RED . "Missing arguments! Usage: /ai setup <provider> <api_key> <model>");
-            $player->sendMessage(TextFormat::GRAY . "Example: /ai setup openai sk-xxx gpt-4");
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.missing_arguments");
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.usage_example");
             return false;
         }
         
@@ -128,12 +128,12 @@ class AICommand extends Command {
         $supportedProviders = ["openai", "openrouter", "anthropic", "google", "local"];
         
         if (!in_array($providerName, $supportedProviders)) {
-            $player->sendMessage(TextFormat::RED . "Invalid provider! Supported providers: " . implode(", ", $supportedProviders));
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.invalid_provider_list", ["providers" => implode(", ", $supportedProviders)]);
             return false;
         }
         
         // Skip all validation - direct setup to config
-        $player->sendMessage(TextFormat::YELLOW . "Setting up provider directly...");
+        $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.setting_up");
         $this->setupProviderDirectly($player, $providerName, $apiKey, $modelName);
         return true;
     }
@@ -158,16 +158,16 @@ class AICommand extends Command {
         // Reload providers
         $this->plugin->getProviderManager()->reloadProviders();
         
-        $player->sendMessage(TextFormat::GREEN . "✓ Successfully configured {$providerName} with model {$modelName}!");
-        $player->sendMessage(TextFormat::GRAY . "Provider has been set as default.");
+        $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.config_success", ["provider" => $providerName, "model" => $modelName]);
+        $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_set_default");
         
         // Add usage hints for each provider using match
         match ($providerName) {
-            'anthropic' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like claude-3-5-sonnet-20241022, claude-3-opus-20240229"),
-            'local' => $player->sendMessage(TextFormat::GRAY . "Note: Make sure your local endpoint is configured properly"),
-            'openai' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like gpt-4, gpt-3.5-turbo"),
-            'openrouter' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like openai/gpt-4, anthropic/claude-3-5-sonnet"),
-            'google' => $player->sendMessage(TextFormat::GRAY . "Note: Use models like gemini-pro, gemini-1.5-flash"),
+            'anthropic' => $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_anthropic"),
+            'local' => $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_local"),
+            'openai' => $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_openai"),
+            'openrouter' => $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_openrouter"),
+            'google' => $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_google"),
             default => null
         };
     }

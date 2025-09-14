@@ -46,33 +46,6 @@ class HttpRequestTask {
     }
 
     /**
-     * Mask Authorization header value for safe logging
-     */
-    private function maskHeadersForLog(array $headers): array {
-        $out = [];
-        foreach ($headers as $k => $v) {
-            // Headers may be given as "Key: value" strings or as assoc ["Key" => "value"]
-            if (is_int($k)) {
-                $line = $v;
-                if (stripos($line, 'authorization:') === 0) {
-                    $out[] = 'Authorization: Bearer <REDACTED>';
-                } else {
-                    $out[] = $line;
-                }
-            } else {
-                $key = $k;
-                $val = $v;
-                if (strtolower($key) === 'authorization') {
-                    $out[] = $key . ': Bearer <REDACTED>';
-                } else {
-                    $out[] = $key . ': ' . $val;
-                }
-            }
-        }
-        return $out;
-    }
-
-    /**
      * Normalize headers into an array of "Key: value" strings and trim values.
      */
     private function normalizeHeaders(array $headers): array {

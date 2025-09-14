@@ -22,6 +22,9 @@ class RequestManager {
     
     /** @var array */
     private array $formContexts = [];
+    
+    /** @var array */
+    private array $readyResponses = [];
 
     /**
      * RequestManager constructor.
@@ -167,6 +170,73 @@ class RequestManager {
      */
     public function setPendingRequest(string $requestId, array $data): void {
         $this->pendingRequests[$requestId] = $data;
+    }
+    
+    /**
+     * Store a ready response for a player
+     * 
+     * @param string $playerName
+     * @param string $question
+     * @param string $response
+     * @return void
+     */
+    public function setReadyResponse(string $playerName, string $question, string $response): void {
+        $this->readyResponses[$playerName] = [
+            'question' => $question,
+            'response' => $response,
+            'timestamp' => time()
+        ];
+        
+        if ($this->plugin->isDebugEnabled()) {
+            $this->plugin->getLogger()->debug("Stored ready response for player {$playerName}");
+        }
+    }
+    
+    /**
+     * Check if a player has a ready response
+     * 
+     * @param string $playerName
+     * @return bool
+     */
+    public function hasReadyResponse(string $playerName): bool {
+        return isset($this->readyResponses[$playerName]);
+    }
+    
+    /**
+     * Get and consume ready response for a player
+     * 
+     * @param string $playerName
+     * @return array|null
+     */
+    public function consumeReadyResponse(string $playerName): ?array {
+        if (isset($this->readyResponses[$playerName])) {
+            $response = $this->readyResponses[$playerName];
+            unset($this->readyResponses[$playerName]);
+            
+            if ($this->plugin->isDebugEnabled()) {
+                $this->plugin->getLogger()->debug("Consumed ready response for player {$playerName}");
+            }
+            
+            return $response;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Clear ready response for a player without consuming
+     * 
+     * @param string $playerName
+     * @return void
+     */
+    public function clearReadyResponse(string $playerName): void {
+        if (isset($this->readyResponses[$playerName])) {
+            unset($this->readyResponses[$playerName]);
+            
+            if ($this->plugin->isDebugEnabled()) {
+                $this->plugin->getLogger()->debug("Cleared ready response for player {$playerName}");
+            }
+        }
     }
     
     /**

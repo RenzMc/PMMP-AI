@@ -329,7 +329,7 @@ class OpenRouterProvider implements AIProvider {
             // Check if request was cancelled
             if ($requestManager->isRequestCancelled($requestId)) {
                 if ($player !== null && $player->isOnline()) {
-                    $player->sendMessage(MinecraftTextFormatter::COLOR_YELLOW . "AI request was cancelled.");
+                    $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.openrouter_request_cancelled"));
                 }
                 return;
             }
@@ -370,7 +370,7 @@ class OpenRouterProvider implements AIProvider {
                 
                 // Send response to player
                 if ($player !== null && $player->isOnline()) {
-                    $player->sendMessage($aiResponse);
+                    $player->sendMessage($this->plugin->getMessageManager()->formatAIResponse($aiResponse));
                     
                     // Add to conversation history
                     $conversationManager = $this->plugin->getConversationManager();
@@ -407,7 +407,7 @@ class OpenRouterProvider implements AIProvider {
                 }
                 
                 $friendlyError .= "Please try again later.";
-                $player->sendMessage(MinecraftTextFormatter::COLOR_RED . $friendlyError);
+                $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.generic_error", ["error" => $friendlyError]));
             }
         } finally {
             // Clean up pending request and mark as complete

@@ -10,7 +10,6 @@ use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
 use Renz\AIAssistant\utils\MinecraftTextFormatter;
 use Renz\AIAssistant\forms\MainForm;
-use Renz\AIAssistant\forms\MainForm;
 
 class ResponseForm {
     /** @var Main */
@@ -36,7 +35,7 @@ class ResponseForm {
  */
    public function sendTo(Player $player, string $question, string $response, int $currentPage = 0, array $pages = []): void {
     // Enhanced error state detection
-    $isError = (strpos($response, "§c") === 0) ||
+    $isError = (strpos($response, "?c") === 0) ||
                (strpos($response, "error") !== false) ||
                (strpos($response, "failed") !== false) ||
                (strpos($response, "Error:") !== false) ||
@@ -48,13 +47,11 @@ class ResponseForm {
         $isError = true;
     }
 
-    // Improved request management - cancel if error or final (kept consistent with original intent)
-    if ($isError) {
-        $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
-    } else {
+    // Improved request management - cancel requests only for final responses (successful or error)
+    // This ensures we don't cancel active requests unless we have a final response
+    if ($isError || (!empty(trim($response)) && strpos($response, "Processing") === false)) {
         $this->plugin->getProviderManager()->cancelPlayerRequests($player->getName());
     }
-    // (Note: both branches call cancelPlayerRequests; kept intentionally per original logic)
 
     // Split response into pages if it's too long and not already paginated
     if (empty($pages) && !$isError) {
@@ -169,12 +166,18 @@ class ResponseForm {
     // Pagination buttons (if multiple pages exist)
     if ($totalPages > 1) {
         if ($currentPage < $totalPages - 1) {
-            $form->addButton("§aNext Page", 0, "textures/ui/arrow_right");
+            $nextText = $this->plugin->getFormSetting("response_form.buttons.next_page.text", "Next Page");
+            $nextColor = $this->plugin->getFormSetting("response_form.buttons.next_page.color", "&a");
+            $nextTexture = $this->plugin->getFormSetting("response_form.buttons.next_page.texture", "textures/ui/arrow_right");
+            $form->addButton($this->plugin->formatFormText($nextColor . $nextText), 0, $nextTexture);
             $buttonMap[$buttonIndex++] = 'next_page';
         }
 
         if ($currentPage > 0) {
-            $form->addButton("§ePrevious Page", 0, "textures/ui/arrow_left");
+            $prevText = $this->plugin->getFormSetting("response_form.buttons.prev_page.text", "Previous Page");
+            $prevColor = $this->plugin->getFormSetting("response_form.buttons.prev_page.color", "&e");
+            $prevTexture = $this->plugin->getFormSetting("response_form.buttons.prev_page.texture", "textures/ui/arrow_left");
+            $form->addButton($this->plugin->formatFormText($prevColor . $prevText), 0, $prevTexture);
             $buttonMap[$buttonIndex++] = 'prev_page';
         }
     }
@@ -195,7 +198,10 @@ class ResponseForm {
 
     // Retry button (show if error occurred)
     if ($isError) {
-        $form->addButton("§6Retry Question", 0, "textures/ui/refresh");
+        $retryText = $this->plugin->getFormSetting("response_form.buttons.retry.text", "Retry Question");
+        $retryColor = $this->plugin->getFormSetting("response_form.buttons.retry.color", "&6");
+        $retryTexture = $this->plugin->getFormSetting("response_form.buttons.retry.texture", "textures/ui/refresh");
+        $form->addButton($this->plugin->formatFormText($retryColor . $retryText), 0, $retryTexture);
         $buttonMap[$buttonIndex++] = 'retry';
     }
 
@@ -239,7 +245,7 @@ class ResponseForm {
     }
     
     /**
-     * ADDED: Format response content based on state
+     * FIXED: Format response content based on state - Removed status indicators
      * 
      * @param string $response
      * @param bool $isError
@@ -254,16 +260,12 @@ class ResponseForm {
         }
         
         // Apply text formatting if needed
-        if (!str_contains($formattedResponse, "§")) {
+        if (!str_contains($formattedResponse, "?")) {
             $formattedResponse = MinecraftTextFormatter::formatText($formattedResponse);
         }
         
-        if ($isError) {
-            $formattedResponse = "§l§4[ERROR] " . $formattedResponse;
-        } else {
-            $formattedResponse = "§l§2[COMPLETE] " . $formattedResponse;
-        }
-        
+        // REMOVED: Status indicators [COMPLETE] and [ERROR]
+        // Just return the formatted response without status prefixes
         return $formattedResponse;
     }
     
@@ -380,13 +382,7 @@ class ResponseForm {
     }
     
     /**
-     * Get appropriate error message based on exception type
-     * 
-     * @param \Throwable $e
-     * @return string
-     */
-    /**
-     * Create a new session and redirect to chat form
+     * FIXED: Create a new session and redirect to MainForm
      * 
      * @param Player $player
      */
@@ -394,19 +390,19 @@ class ResponseForm {
         // Create a new session
         $sessionId = $this->plugin->getConversationManager()->createNewSession($player->getName());
         
-        // Notify the player
+        // FIXED: Pass array as second parameter instead of string
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_title", "New Session Created"),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_body", "You can now start a new conversation.")
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_title", []),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_body", [])
         );
         
-        // Open chat form for the new session
+        // Open MainForm for the new session instead of ChatForm
         $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(
             function() use ($player): void {
                 if ($player->isOnline()) {
-                    $form = new ChatForm($this->plugin);
+                    $form = new MainForm($this->plugin);
                     $form->sendTo($player);
                 }
             }

@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace Renz\AIAssistant\forms;
 
 use jojoe77777\FormAPI\SimpleForm;
-use jojoe77777\FormAPI\CustomForm;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
-use Renz\AIAssistant\forms\ResponseForm;
-use Renz\AIAssistant\forms\TokenShopForm;
+use Renz\AIAssistant\utils\MinecraftTextFormatter;
 
 class MainForm {
     /** @var Main */
@@ -31,450 +29,536 @@ class MainForm {
      * @param Player $player
      */
     public function sendTo(Player $player): void {
-        $form = new SimpleForm(function(Player $player, ?int $data) {
+        // Check if "View Response" button should be shown and build dynamic button mapping
+        $requestManager = $this->plugin->getRequestManager();
+        $hasReadyResponse = $requestManager->hasReadyResponse($player->getName());
+        $viewResponseEnabled = $this->plugin->getFormSetting("main_form.buttons.view_response.enabled", true);
+        $globalViewResponseEnabled = $this->plugin->getConfig()->getNested("advanced.view_response_button.enabled", true);
+        $showViewResponseButton = $hasReadyResponse && $viewResponseEnabled && $globalViewResponseEnabled;
+        
+        // Build button mapping - adjust indices based on whether View Response is shown
+        $buttonMap = [];
+        $buttonIndex = 0;
+        
+        // View Response button (if enabled and has ready response) - show first for visibility
+        if ($showViewResponseButton) {
+            $buttonMap[$buttonIndex++] = 'view_response';
+        }
+        
+        // Standard buttons
+        $buttonMap[$buttonIndex++] = 'chat';          // Chat with AI
+        $buttonMap[$buttonIndex++] = 'history';       // View Chat History  
+        $buttonMap[$buttonIndex++] = 'crafting';      // Crafting Helper
+        $buttonMap[$buttonIndex++] = 'building';      // Building Calculator
+        $buttonMap[$buttonIndex++] = 'token_shop';    // Token Shop
+        $buttonMap[$buttonIndex++] = 'server_info';   // Server Info
+        $buttonMap[$buttonIndex++] = 'settings';      // Settings
+
+        $form = new SimpleForm(function(Player $player, ?int $data) use (&$buttonMap) {
             if ($data === null) {
                 return;
             }
+
+            $action = $buttonMap[$data] ?? 'unknown';
             
-            switch ($data) {
-                case 0: // Chat with AI
+            switch ($action) {
+                case 'view_response':
+                    $this->viewReadyResponse($player);
+                    break;
+                    
+                case 'chat':
                     $this->openChatForm($player);
                     break;
-                    
-                case 1: // View Chat History
-                    $form = new HistoryForm($this->plugin);
-                    $form->sendTo($player);
+
+                case 'history':
+                    $historyForm = new HistoryForm($this->plugin);
+                    $historyForm->sendTo($player);
                     break;
-                    
-                case 2: // Crafting Helper
-                    $this->openCraftingHelperForm($player);
+
+                case 'crafting':
+                    $this->openCraftingForm($player);
                     break;
-                    
-                case 3: // Building Calculator
-                    $this->openBuildingCalculatorForm($player);
+
+                case 'building':
+                    $this->openBuildingForm($player);
                     break;
-                    
-                case 4: // Token Shop
-                    $form = new TokenShopForm($this->plugin);
-                    $form->sendTo($player);
+
+                case 'token_shop':
+                    $tokenShopForm = new TokenShopForm($this->plugin);
+                    $tokenShopForm->sendTo($player);
                     break;
-                    
-                case 5: // Server Info
-                    $form = new ServerInfoForm($this->plugin);
-                    $form->sendTo($player);
+
+                case 'server_info':
+                    $serverInfoForm = new ServerInfoForm($this->plugin);
+                    $serverInfoForm->sendTo($player);
                     break;
-                    
+
+                case 'settings':
+                    $this->openSettingsForm($player);
+                    break;
             }
         });
-        
-        // Get form title and content from forms config
+
+        // Get form settings from forms.yml
         $title = $this->plugin->getFormSetting("main_form.title", "AI Assistant");
         $content = $this->plugin->getFormSetting("main_form.content", "Welcome to the AI Assistant! What would you like to do?");
-        
-        // Format title with text formatting from config
+
+        // Format title with proper colors
         $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
         $title = $this->plugin->formatFormText($titleFormat . $title);
-        
-        // Set form title
+
         $form->setTitle($title);
-        
-        // Add token status if token system is enabled
-        if ($this->plugin->getConfig()->getNested("tokens.enabled", true)) {
-            $tokenManager = $this->plugin->getTokenManager();
-            $tokenStatus = $tokenManager->getTokenStatusMessage($player->getName());
-            
-            $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
-            $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-            
-            $content = TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n") . 
-                      TextFormat::colorize($contentFormat . $content);
-        } else {
-            $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-            $content = TextFormat::colorize($contentFormat . $content);
-        }
-        
         $form->setContent($content);
-        
-        // Add buttons from config
-        $this->addButtonFromConfig($form, "main_form.buttons.chat", "Chat with AI", 0);
-        $this->addButtonFromConfig($form, "main_form.buttons.history", "View Chat History", 1);
-        $this->addButtonFromConfig($form, "main_form.buttons.crafting", "Crafting Helper", 2);
-        $this->addButtonFromConfig($form, "main_form.buttons.building", "Building Calculator", 3);
-        
-        if ($this->plugin->getConfig()->getNested("tokens.enabled", true)) {
-            $this->addButtonFromConfig($form, "main_form.buttons.token_shop", "Token Shop", 4);
+
+        // Add buttons dynamically based on mapping
+        // View Response button (if applicable)
+        if ($showViewResponseButton) {
+            $viewResponseText = $this->plugin->getFormSetting("main_form.buttons.view_response.text", "View Response");
+            $viewResponseColor = $this->plugin->getFormSetting("main_form.buttons.view_response.color", "&d");
+            $viewResponseTexture = $this->plugin->getFormSetting("main_form.buttons.view_response.texture", "textures/ui/check");
+            $form->addButton($this->plugin->formatFormText($viewResponseColor . $viewResponseText), 0, $viewResponseTexture);
         }
-        
-        $this->addButtonFromConfig($form, "main_form.buttons.server_info", "Server Info", 5);
-        
-        
+
+        // Chat with AI button
+        $chatText = $this->plugin->getFormSetting("main_form.buttons.chat.text", "Chat with AI");
+        $chatColor = $this->plugin->getFormSetting("main_form.buttons.chat.color", "&a");
+        $chatTexture = $this->plugin->getFormSetting("main_form.buttons.chat.texture", "textures/ui/chat_icon");
+        $form->addButton($this->plugin->formatFormText($chatColor . $chatText), 0, $chatTexture);
+
+        // History button
+        $historyText = $this->plugin->getFormSetting("main_form.buttons.history.text", "View Chat History");
+        $historyColor = $this->plugin->getFormSetting("main_form.buttons.history.color", "&d");
+        $historyTexture = $this->plugin->getFormSetting("main_form.buttons.history.texture", "textures/ui/history_icon");
+        $form->addButton($this->plugin->formatFormText($historyColor . $historyText), 0, $historyTexture);
+
+        // Crafting Helper button
+        $craftingText = $this->plugin->getFormSetting("main_form.buttons.crafting.text", "Crafting Helper");
+        $craftingColor = $this->plugin->getFormSetting("main_form.buttons.crafting.color", "&6");
+        $craftingTexture = $this->plugin->getFormSetting("main_form.buttons.crafting.texture", "textures/ui/crafting_icon");
+        $form->addButton($this->plugin->formatFormText($craftingColor . $craftingText), 0, $craftingTexture);
+
+        // Building Calculator button
+        $buildingText = $this->plugin->getFormSetting("main_form.buttons.building.text", "Building Calculator");
+        $buildingColor = $this->plugin->getFormSetting("main_form.buttons.building.color", "&e");
+        $buildingTexture = $this->plugin->getFormSetting("main_form.buttons.building.texture", "textures/ui/building_icon");
+        $form->addButton($this->plugin->formatFormText($buildingColor . $buildingText), 0, $buildingTexture);
+
+        // Token Shop button
+        $tokenShopText = $this->plugin->getFormSetting("main_form.buttons.token_shop.text", "Token Shop");
+        $tokenShopColor = $this->plugin->getFormSetting("main_form.buttons.token_shop.color", "&6");
+        $tokenShopTexture = $this->plugin->getFormSetting("main_form.buttons.token_shop.texture", "textures/ui/token_icon");
+        $form->addButton($this->plugin->formatFormText($tokenShopColor . $tokenShopText), 0, $tokenShopTexture);
+
+        // Server Info button
+        $serverInfoText = $this->plugin->getFormSetting("main_form.buttons.server_info.text", "Server Info");
+        $serverInfoColor = $this->plugin->getFormSetting("main_form.buttons.server_info.color", "&9");
+        $serverInfoTexture = $this->plugin->getFormSetting("main_form.buttons.server_info.texture", "textures/ui/info_icon");
+        $form->addButton($this->plugin->formatFormText($serverInfoColor . $serverInfoText), 0, $serverInfoTexture);
+
+        // Settings button
+        $settingsText = $this->plugin->getFormSetting("main_form.buttons.settings.text", "Settings");
+        $settingsColor = $this->plugin->getFormSetting("main_form.buttons.settings.color", "&c");
+        $settingsTexture = $this->plugin->getFormSetting("main_form.buttons.settings.texture", "textures/ui/settings_icon");
+        $form->addButton($this->plugin->formatFormText($settingsColor . $settingsText), 0, $settingsTexture);
+
         $form->sendToPlayer($player);
-    }
-    
-    /**
-     * Add a button to the form using configuration
-     * 
-     * @param SimpleForm $form The form to add the button to
-     * @param string $configPath The path to the button configuration
-     * @param string $defaultText The default button text
-     * @param int $index The button index for debugging
-     */
-    private function addButtonFromConfig(SimpleForm $form, string $configPath, string $defaultText, int $index): void {
-        // Get button text from config
-        $text = $this->plugin->getFormSetting("$configPath.text", $defaultText);
         
-        // Get button color from config
-        $color = $this->plugin->getFormSetting("$configPath.color", "&a&l");
-        
-        // Format button text
-        $buttonText = $this->plugin->formatFormText($color . $text);
-        
-        // Get button texture from config
-        $texture = $this->plugin->getFormSetting("$configPath.texture", "");
-        
-        // Add button to form
-        $form->addButton($buttonText, 0, $texture);
-        
-        if ($this->plugin->isDebugEnabled()) {
-            $this->plugin->getLogger()->debug("Added button '$text' with texture '$texture' at index $index");
-        }
+        // Send toast notification
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "info",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.title", []),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.body", [])
+        );
     }
 
     /**
-     * Open the crafting helper form
-     * 
-     * @param Player $player
-     */
-    private function openCraftingHelperForm(Player $player): void {
-        $form = new CustomForm(function(Player $player, ?array $data) {
-            if ($data === null) {
-                return;
-            }
-            
-            $item = trim($data[1] ?? "");
-            if (empty($item)) {
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.enter_item_generic");
-                return;
-            }
-            
-            // Check if player has enough tokens
-            $tokenManager = $this->plugin->getTokenManager();
-            if ($tokenManager->isEnabled()) {
-                if (!$tokenManager->canUseToken($player)) {
-                    $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
-                    $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
-                    
-                    // Open token shop form
-                    $form = new TokenShopForm($this->plugin);
-                    $form->sendTo($player);
-                    return;
-                }
-            }
-            
-            // Check if player already has an active request
-            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
-            if ($requestManager->hasActiveRequest($player->getName())) {
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
-                return;
-            }
-            
-            // Create the query
-            $query = "How to craft " . $item . " in Minecraft";
-            
-            // Send processing notification
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
-            
-            // Store form context for async response
-            $requestManager->setFormContext($player->getName(), [
-                'type' => 'crafting_form',
-                'question' => $query,
-                'item' => $item,
-                'tokenManager' => $this->plugin->getTokenManager()
-            ]);
-            
-            // Process the query with async handling
-            try {
-                $this->plugin->getProviderManager()->processQuery($player, $query);
-            } catch (\Throwable $e) {
-                $this->plugin->getLogger()->error("Crafting Helper processQuery error: " . $e->getMessage());
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
-                return;
-            }
-        });
-        
-        // Get form title and content from forms config
-        $title = $this->plugin->getFormSetting("crafting_form.title", "Crafting Helper");
-        $content = $this->plugin->getFormSetting("crafting_form.content", "Enter the name of the item you want to craft:");
-        $placeholder = $this->plugin->getFormSetting("crafting_form.placeholder", "Diamond Pickaxe");
-        
-        // Format title with text formatting from config
-        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
-        $title = $this->plugin->formatFormText($titleFormat . $title);
-        
-        // Set form title
-        $form->setTitle($title);
-        
-        // Add token status if token system is enabled
-        if ($this->plugin->getConfig()->getNested("tokens.enabled", true)) {
-            $tokenManager = $this->plugin->getTokenManager();
-            $tokenStatus = $tokenManager->getTokenStatusMessage($player->getName());
-            
-            $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
-            $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-            
-            $form->addLabel(TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n") . 
-                           TextFormat::colorize($contentFormat . $content));
-        } else {
-            $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-            $form->addLabel(TextFormat::colorize($contentFormat . $content));
-        }
-        
-        // Add input field with better guidance
-        $form->addInput("§fItem Name:", "Example: diamond sword, iron pickaxe, crafting table");
-        
-        $form->sendToPlayer($player);
-        
-        // Send toast notification when form is opened
-        $this->plugin->getMessageManager()->sendToastNotification($player, "info", $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title"), $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body"));
-    }
-
-    /**
-     * Open the building calculator form
-     * 
-     * @param Player $player
-     */
-    private function openBuildingCalculatorForm(Player $player): void {
-        $form = new CustomForm(function(Player $player, ?array $data) {
-            if ($data === null) {
-                return;
-            }
-            
-            // Get form data
-            $length = (int) ($data[1] ?? 10);
-            $width = (int) ($data[2] ?? 10);
-            $height = (int) ($data[3] ?? 5);
-            
-            // Get building styles from config
-            $styles = $this->plugin->getFormSetting("building_calculator_form.fields.style.options", ["Modern", "Medieval", "Futuristic", "Rustic", "Industrial"]);
-            $style = $styles[$data[4] ?? 0];
-            
-            // Check if player has enough tokens
-            $tokenManager = $this->plugin->getTokenManager();
-            if ($tokenManager->isEnabled()) {
-                if (!$tokenManager->canUseToken($player)) {
-                    $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
-                    $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
-                    
-                    // Open token shop form
-                    $form = new TokenShopForm($this->plugin);
-                    $form->sendTo($player);
-                    return;
-                }
-            }
-            
-            // Check if player already has an active request
-            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
-            if ($requestManager->hasActiveRequest($player->getName())) {
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
-                return;
-            }
-            
-            // Create the query
-            $query = "Calculate materials for a {$length}x{$width}x{$height} {$style} house in Minecraft";
-            
-            // Send processing notification  
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
-            
-            // Store form context for async response
-            $requestManager->setFormContext($player->getName(), [
-                'type' => 'building_form',
-                'question' => $query,
-                'dimensions' => "{$length}x{$width}x{$height}",
-                'style' => $style,
-                'tokenManager' => $this->plugin->getTokenManager()
-            ]);
-            
-            // Process the query with async handling
-            try {
-                $this->plugin->getProviderManager()->processQuery($player, $query);
-            } catch (\Throwable $e) {
-                $this->plugin->getLogger()->error("Building Calculator processQuery error: " . $e->getMessage());
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
-                return;
-            }
-        });
-        
-        // Get form title and content from forms config
-        $title = $this->plugin->getFormSetting("building_calculator_form.title", "Building Calculator");
-        $content = $this->plugin->getFormSetting("building_calculator_form.content", "Calculate materials needed for your building project:");
-        
-        // Get field labels and defaults from config
-        $lengthLabel = $this->plugin->getFormSetting("building_calculator_form.fields.length.label", "Length");
-        $lengthDefault = $this->plugin->getFormSetting("building_calculator_form.fields.length.default", "10");
-        $lengthPlaceholder = $this->plugin->getFormSetting("building_calculator_form.fields.length.placeholder", "10");
-        
-        $widthLabel = $this->plugin->getFormSetting("building_calculator_form.fields.width.label", "Width");
-        $widthDefault = $this->plugin->getFormSetting("building_calculator_form.fields.width.default", "10");
-        $widthPlaceholder = $this->plugin->getFormSetting("building_calculator_form.fields.width.placeholder", "10");
-        
-        $heightLabel = $this->plugin->getFormSetting("building_calculator_form.fields.height.label", "Height");
-        $heightDefault = $this->plugin->getFormSetting("building_calculator_form.fields.height.default", "5");
-        $heightPlaceholder = $this->plugin->getFormSetting("building_calculator_form.fields.height.placeholder", "5");
-        
-        $styleLabel = $this->plugin->getFormSetting("building_calculator_form.fields.style.label", "Building Style");
-        $styleOptions = $this->plugin->getFormSetting("building_calculator_form.fields.style.options", ["Modern", "Medieval", "Futuristic", "Rustic", "Industrial"]);
-        
-        // Format title with text formatting from config
-        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
-        $title = $this->plugin->formatFormText($titleFormat . $title);
-        
-        // Set form title
-        $form->setTitle($title);
-        
-        // Add token status if token system is enabled
-        if ($this->plugin->getConfig()->getNested("tokens.enabled", true)) {
-            $tokenManager = $this->plugin->getTokenManager();
-            $tokenStatus = $tokenManager->getTokenStatusMessage($player->getName());
-            
-            $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
-            $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-            
-            $form->addLabel(TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n") . 
-                           TextFormat::colorize($contentFormat . $content));
-        } else {
-            $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-            $form->addLabel(TextFormat::colorize($contentFormat . $content));
-        }
-        
-        // Add input fields
-        $form->addInput(TextFormat::colorize("&f" . $lengthLabel . ":"), $lengthPlaceholder, $lengthDefault);
-        $form->addInput(TextFormat::colorize("&f" . $widthLabel . ":"), $widthPlaceholder, $widthDefault);
-        $form->addInput(TextFormat::colorize("&f" . $heightLabel . ":"), $heightPlaceholder, $heightDefault);
-        $form->addDropdown(TextFormat::colorize("&f" . $styleLabel . ":"), $styleOptions);
-        
-        $form->sendToPlayer($player);
-        
-        // Send toast notification when form is opened
-        $this->plugin->getMessageManager()->sendToastNotification($player, "info", $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_title"), $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_body"));
-    }
-
-    /**
-     * Open the chat form
+     * Open the chat form for a player
      * 
      * @param Player $player
      */
     public function openChatForm(Player $player): void {
-    $form = new CustomForm(function(Player $player, ?array $data) {
-        if ($data === null) return;
-
-        $question = trim((string)($data[1] ?? ""));
-        if ($question === "") {
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.enter_question_first");
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_question");
-            $this->openChatForm($player);
-            return;
-        }
-
+        // Check if token system is enabled and player has tokens
         $tokenManager = $this->plugin->getTokenManager();
         if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.no_tokens_purchase");
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "no_tokens");
-            (new TokenShopForm($this->plugin))->sendTo($player);
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body", [])
+            );
             return;
         }
 
+        // Check if player already has an active request
         $requestManager = $this->plugin->getProviderManager()->getRequestManager();
         if ($requestManager->hasActiveRequest($player->getName())) {
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.request_already_active");
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_active");
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.request_active.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.request_active.body", [])
+            );
             return;
         }
 
-        $requestManager->setFormContext($player->getName(), [
-            'type' => 'chat_form',
-            'question' => $question,
-            'tokenManager' => $tokenManager
-        ]);
+        // Create the chat form
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+            if ($data === null) {
+                // Form closed
+                return;
+            }
 
-        $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "processing");
+            // Get the question from the form data
+            $question = trim($data[0] ?? "");
+            if (empty($question)) {
+                $this->plugin->getMessageManager()->sendToastNotification(
+                    $player,
+                    "error",
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.no_question_title", []),
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.no_question_body", [])
+                );
+                return;
+            }
 
-        try {
-            $this->plugin->getProviderManager()->processQuery($player, $question);
-        } catch (\Throwable $e) {
-            $this->plugin->getLogger()->error("ChatForm processQuery error: " . $e->getMessage());
-            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.generation_failed");
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "request_cancelled");
-            return;
-        }
-    });
+            // Check if token system is enabled and player has tokens
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "tokens.no_tokens_purchase");
+                return;
+            }
 
-    $title = $this->plugin->formatFormText($this->plugin->getFormSetting("general.text_formatting.title", "&l&b") . 
-                                           $this->plugin->getFormSetting("chat_form.title", "Chat with AI"));
-    $content = $this->plugin->getFormSetting("chat_form.content", "What would you like to ask the AI Assistant?");
-    $placeholder = $this->plugin->getFormSetting("chat_form.placeholder", "Type your question here...");
+            // Check if player already has an active request
+            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+            if ($requestManager->hasActiveRequest($player->getName())) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.request_already_active");
+                return;
+            }
 
-    $form->setTitle($title);
+            // Set form context for the request
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'chat_form',
+                'question' => $question,
+                'tokenManager' => $tokenManager
+            ]);
 
-    $tokenManager = $this->plugin->getTokenManager();
-    if ($tokenManager->isEnabled()) {
-        $tokenStatus = $tokenManager->getTokenStatusMessage($player->getName());
-        $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
-        $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-        $form->addLabel(TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n") .
-                        TextFormat::colorize($contentFormat . $content));
-    } else {
-        $form->addLabel(TextFormat::colorize($this->plugin->getFormSetting("general.text_formatting.content", "&7") . $content));
+            // Process the query
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $question);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Error in openChatForm for player " . $player->getName() . ": " . $e->getMessage());
+                $errorMessage = $this->getErrorMessage($e);
+                $player->sendMessage($errorMessage);
+            }
+        });
+
+        // Get form settings from forms.yml
+        $title = $this->plugin->getFormSetting("chat_form.title", "Chat with AI");
+        $content = $this->plugin->getFormSetting("chat_form.content", "What would you like to ask the AI Assistant?");
+        $placeholder = $this->plugin->getFormSetting("chat_form.placeholder", "Type your question here...");
+
+        // Format title with proper colors
+        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
+        $title = $this->plugin->formatFormText($titleFormat . $title);
+
+        $form->setTitle($title);
+        $form->addInput($content, $placeholder);
+        $form->sendToPlayer($player);
+
+        // Send toast notification
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "info",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_title", []),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_body", [])
+        );
     }
 
-    $form->addInput(TextFormat::colorize("&fYour Question:"), $placeholder);
+    /**
+     * Open the crafting form for a player
+     * 
+     * @param Player $player
+     */
+    private function openCraftingForm(Player $player): void {
+        // Check if token system is enabled and player has tokens
+        $tokenManager = $this->plugin->getTokenManager();
+        if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body", [])
+            );
+            return;
+        }
 
-    $form->sendToPlayer($player);
+        // Create the crafting form
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+            if ($data === null) {
+                // Form closed
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.crafting_lookup_cancelled");
+                return;
+            }
 
-    $this->plugin->getMessageManager()->sendToastNotification(
-        $player,
-        "info",
-        $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_title"),
-        $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_body")
-    );
-}
+            // Get the item name from the form data
+            $itemName = trim($data[0] ?? "");
+            if (empty($itemName)) {
+                $this->plugin->getMessageManager()->sendToastNotification(
+                    $player,
+                    "error",
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_title", []),
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_body", [])
+                );
+                return;
+            }
+
+            // Check if token system is enabled and player has tokens
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "tokens.no_tokens_purchase");
+                return;
+            }
+
+            // Construct the crafting query
+            $query = "How do I craft a {$itemName} in Minecraft? Please provide the exact recipe with ingredients and pattern.";
+
+            // Set form context for the request
+            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'crafting_form',
+                'item' => $itemName,
+                'question' => $query,
+                'tokenManager' => $tokenManager
+            ]);
+
+            // Send looking up notification
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "info",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.body", ["item" => $itemName])
+            );
+
+            // Process the query
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $query);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Error in openCraftingForm for player " . $player->getName() . ": " . $e->getMessage());
+                $errorMessage = $this->getErrorMessage($e);
+                $player->sendMessage($errorMessage);
+            }
+        });
+
+        // Get form settings
+        $title = "Crafting Helper";
+        $content = "Enter the name of the item you want to craft:";
+        $placeholder = "e.g., diamond sword, crafting table, etc.";
+
+        $form->setTitle(TextFormat::colorize("&l&bCrafting Helper"));
+        $form->addInput($content, $placeholder);
+        $form->sendToPlayer($player);
+
+        // Send toast notification
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "info",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title", []),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body", [])
+        );
+    }
+
+    /**
+     * Open the building calculator form for a player
+     * 
+     * @param Player $player
+     */
+    private function openBuildingForm(Player $player): void {
+        // Check if token system is enabled and player has tokens
+        $tokenManager = $this->plugin->getTokenManager();
+        if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body", [])
+            );
+            return;
+        }
+
+        // Create the building calculator form
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+            if ($data === null) {
+                // Form closed
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.building_calc_cancelled");
+                return;
+            }
+
+            // Get the dimensions from the form data
+            $width = (int)($data[0] ?? 0);
+            $height = (int)($data[1] ?? 0);
+            $depth = (int)($data[2] ?? 0);
+            $material = trim($data[3] ?? "");
+
+            if ($width <= 0 || $height <= 0 || $depth <= 0 || empty($material)) {
+                $player->sendMessage(TextFormat::RED . "Please enter valid dimensions and material.");
+                return;
+            }
+
+            // Check if token system is enabled and player has tokens
+            $tokenManager = $this->plugin->getTokenManager();
+            if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "tokens.no_tokens_purchase");
+                return;
+            }
+
+            // Construct the building query
+            $query = "I want to build a structure in Minecraft with these dimensions: width = {$width}, height = {$height}, depth = {$depth}. " .
+                     "I want to use {$material} as the main material. How many blocks do I need? " .
+                     "Please calculate the total blocks needed for walls, floor, and ceiling. " .
+                     "Also suggest any additional materials I might need for details or decoration.";
+
+            // Set form context for the request
+            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+            $requestManager->setFormContext($player->getName(), [
+                'type' => 'building_form',
+                'dimensions' => [
+                    'width' => $width,
+                    'height' => $height,
+                    'depth' => $depth
+                ],
+                'material' => $material,
+                'question' => $query,
+                'tokenManager' => $tokenManager
+            ]);
+
+            // Process the query
+            try {
+                $this->plugin->getProviderManager()->processQuery($player, $query);
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Error in openBuildingForm for player " . $player->getName() . ": " . $e->getMessage());
+                $errorMessage = $this->getErrorMessage($e);
+                $player->sendMessage($errorMessage);
+            }
+        });
+
+        // Set form title and content
+        $form->setTitle(TextFormat::colorize("&l&bBuilding Calculator"));
+        $form->addInput("Width (blocks):", "e.g., 10");
+        $form->addInput("Height (blocks):", "e.g., 5");
+        $form->addInput("Depth (blocks):", "e.g., 8");
+        $form->addInput("Main Material:", "e.g., stone, wood, etc.");
+        $form->sendToPlayer($player);
+
+        // Send toast notification
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "info",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_title", []),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_body", [])
+        );
+    }
+
+    /**
+     * Open the settings form for a player
+     * 
+     * @param Player $player
+     */
+    private function openSettingsForm(Player $player): void {
+        // Check if player has permission
+        if (!$player->hasPermission("aiassistant.settings")) {
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.no_permission.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.no_permission.body", [])
+            );
+            return;
+        }
+
+        // Create the settings form
+        $form = new SimpleForm(function(Player $player, ?int $data) {
+            if ($data === null) {
+                return;
+            }
+
+            // Return to main menu
+            $this->sendTo($player);
+        });
+
+        $form->setTitle(TextFormat::colorize("&l&bSettings"));
+        $form->setContent("Settings are currently only available through commands.\n\nUse /ai provider list to see available providers.\nUse /ai provider set <name> to change the default provider.");
+        $form->addButton(TextFormat::colorize("&9Back to Main Menu"), 0, "textures/ui/arrow_left");
+        $form->sendToPlayer($player);
+    }
 
     /**
      * Get appropriate error message based on exception type
-     *
+     * 
      * @param \Throwable $e
      * @return string
      */
     private function getErrorMessage(\Throwable $e): string {
         $errorMsg = $e->getMessage();
-
+        
+        // Check for specific error types and return appropriate configured messages
         if (strpos($errorMsg, 'timeout') !== false || strpos($errorMsg, 'timed out') !== false) {
             return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_timeout_error");
         }
-
+        
         if (strpos($errorMsg, 'connection') !== false || strpos($errorMsg, 'connect') !== false) {
             return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_connection_error");
         }
-
+        
         if (strpos($errorMsg, 'rate limit') !== false || strpos($errorMsg, 'too many') !== false) {
             return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_rate_limit_error");
         }
-
+        
         if (strpos($errorMsg, 'quota') !== false || strpos($errorMsg, 'exceeded') !== false) {
             return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_quota_exceeded");
         }
-
+        
         if (strpos($errorMsg, 'invalid') !== false || strpos($errorMsg, 'parse') !== false) {
             return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_invalid_response");
         }
-
+        
         if (strpos($errorMsg, 'unavailable') !== false || strpos($errorMsg, 'service') !== false) {
             return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_service_unavailable");
         }
-
+        
+        // Default error message
         return $this->plugin->getMessageManager()->getConfigurableMessage("forms.ai_unknown_error");
+    }
+
+    /**
+     * View a ready AI response for the player
+     * 
+     * @param Player $player
+     */
+    private function viewReadyResponse(Player $player): void {
+        $requestManager = $this->plugin->getRequestManager();
+        $readyResponse = $requestManager->consumeReadyResponse($player->getName());
+        
+        if ($readyResponse !== null) {
+            $question = $readyResponse['question'];
+            $response = $readyResponse['response'];
+            
+            // Show the response in a ResponseForm
+            $responseForm = new ResponseForm($this->plugin);
+            $responseForm->sendTo($player, $question, $response);
+            
+            // Send toast notification
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "response_ready");
+        } else {
+            // No ready response found - this shouldn't happen but handle gracefully
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.defaults.title", []),
+                "No response available to view."
+            );
+            
+            // Return to main menu
+            $this->sendTo($player);
+        }
     }
 }

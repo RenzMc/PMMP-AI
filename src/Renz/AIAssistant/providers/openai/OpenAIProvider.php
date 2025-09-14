@@ -267,13 +267,13 @@ class OpenAIProvider implements AIProvider {
         
         // Check for HTTP errors
         if (isset($result['error'])) {
-            $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: OpenAI API error: " . $result['error']);
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.openai_api_error", ["error" => $result['error']]));
             return;
         }
         
         $response = $result['response'] ?? '';
         if (empty($response)) {
-            $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: Empty response from OpenAI API");
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.openai_empty_response"));
             return;
         }
         
@@ -338,7 +338,7 @@ class OpenAIProvider implements AIProvider {
                     ), 3);
                 } else {
                     // Send response to player (command usage) 
-                    $player->sendMessage(MinecraftTextFormatter::COLOR_GREEN . "OpenAI: " . MinecraftTextFormatter::COLOR_WHITE . $aiResponse);
+                    $player->sendMessage($this->plugin->getMessageManager()->formatAIResponse($aiResponse));
                     
                     // Complete request tracking
                     $requestManager->completeRequest($playerName, $requestId ?? '');
@@ -348,7 +348,7 @@ class OpenAIProvider implements AIProvider {
                 if ($this->plugin->isDebugEnabled() && isset($responseData["error"])) {
                     $this->plugin->getLogger()->debug("OpenAI API error: " . json_encode($responseData["error"]));
                 }
-                $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: I couldn't generate a response. Please try again later.");
+                $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.openai_generation_failed"));
                 
                 // Clear form context on error
                 $requestManager->clearFormContext($playerName);
@@ -356,7 +356,7 @@ class OpenAIProvider implements AIProvider {
             }
         } catch (\Exception $e) {
             $this->plugin->getLogger()->error("OpenAI response parsing error: " . $e->getMessage());
-            $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: Error processing OpenAI response.");
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.openai_processing_error"));
             
             // Clear form context on error
             $requestManager = $this->plugin->getProviderManager()->getRequestManager();

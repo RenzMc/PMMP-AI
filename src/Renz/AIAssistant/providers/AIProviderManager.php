@@ -46,7 +46,7 @@ class AIProviderManager {
     public function __construct(Main $plugin) {  
         $this->plugin = $plugin;  
         $this->cache = new ResponseCache($plugin);  
-        $this->requestManager = new RequestManager($plugin);  
+        $this->requestManager = $plugin->getRequestManager();  
         $this->loadProviders();  
     }  
   
@@ -496,7 +496,7 @@ DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft format
         $provider = $this->providers[$normalizedProviderName] ?? null;  
         if ($provider === null || !method_exists($provider, 'parseResponse')) {  
             if ($player !== null) {  
-                $player->sendMessage(\pocketmine\utils\TextFormat::RED . "ERROR: Provider '{$providerName}' not available for response parsing. Available: " . implode(", ", array_keys($this->providers)));  
+                $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.provider_not_available", ["provider" => $providerName, "available" => implode(", ", array_keys($this->providers))]));  
             }  
             $this->plugin->getLogger()->error("Provider '{$providerName}' not found or doesn't have parseResponse method. Available: " . implode(", ", array_keys($this->providers)));  
             return;  
@@ -508,7 +508,7 @@ DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft format
           
         if (!$parsedResponse['success']) {  
             if ($player !== null) {  
-                $player->sendMessage(\pocketmine\utils\TextFormat::RED . "ERROR: " . $parsedResponse['error']);  
+                $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.generic_error", ["error" => $parsedResponse['error']]));  
             }  
               
             // Clear form context and complete request on error  
@@ -579,15 +579,36 @@ DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft format
         // Clear form context  
         $this->requestManager->clearFormContext($playerName);  
           
-        // Show response form with small delay  
-        $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(  
-            function() use ($player, $query, $aiResponse): void {  
-                if ($player->isOnline()) {  
-                    $form = new \Renz\AIAssistant\forms\ResponseForm($this->plugin);  
-                    $form->sendTo($player, $query, $aiResponse);  
+        // Store ready response for "View Response" button functionality
+        $this->requestManager->setReadyResponse($playerName, $query, $aiResponse);
+        
+        // Get configuration for auto-show behavior
+        $config = $this->plugin->getConfig();
+        $autoShowEnabled = $config->getNested("advanced.view_response_button.enabled", true);
+        $autoShowDelay = (int) $config->getNested("advanced.view_response_button.auto_show_delay", 3);
+        $showToastNotification = $config->getNested("advanced.view_response_button.show_toast_notification", true);
+        
+        // Send new toast notification if enabled
+        if ($showToastNotification) {
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "view_response_ready");
+        }
+        
+        // Show response form with configurable delay, but only if auto-show is enabled
+        if ($autoShowEnabled) {
+            $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(  
+                function() use ($player, $query, $aiResponse): void {  
+                    if ($player->isOnline()) {
+                        // Check if the response is still available (player might have viewed it already)
+                        if ($this->requestManager->hasReadyResponse($player->getName())) {
+                            $form = new \Renz\AIAssistant\forms\ResponseForm($this->plugin);  
+                            $form->sendTo($player, $query, $aiResponse);
+                            // Clear the ready response since we're showing it now
+                            $this->requestManager->clearReadyResponse($player->getName());
+                        }
+                    }  
                 }  
-            }  
-        ), 3);  
+            ), $autoShowDelay * 20); // Convert to ticks
+        }  
     }  
   
     /**  
@@ -614,7 +635,7 @@ DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft format
         } else {  
             // Fallback: send response directly to player  
             $formattedResponse = $this->plugin->getMessageManager()->formatAIResponse($aiResponse);  
-            $player->sendMessage($formattedResponse);  
+            $player->sendMessage($this->plugin->getMessageManager()->formatAIResponse($formattedResponse));  
               
             // Clear form context  
             $this->requestManager->clearFormContext($player->getName());  

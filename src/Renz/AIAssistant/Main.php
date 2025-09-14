@@ -424,5 +424,46 @@ class Main extends PluginBase implements Listener {
         return TextFormat::colorize($text);
     }
     
+    /**
+     * Check if the global "View Response" button should be shown for a player
+     * 
+     * @param Player $player
+     * @return bool
+     */
+    public function shouldShowGlobalViewResponseButton(Player $player): bool {
+        $requestManager = $this->getRequestManager();
+        $hasReadyResponse = $requestManager->hasReadyResponse($player->getName());
+        $globalEnabled = $this->getConfig()->getNested("advanced.view_response_button.enabled", true);
+        
+        return $hasReadyResponse && $globalEnabled;
+    }
+    
+    /**
+     * Handle the global "View Response" button action
+     * 
+     * @param Player $player
+     * @return void
+     */
+    public function handleGlobalViewResponse(Player $player): void {
+        $requestManager = $this->getRequestManager();
+        $readyResponse = $requestManager->consumeReadyResponse($player->getName());
+        
+        if ($readyResponse !== null) {
+            $question = $readyResponse['question'];
+            $response = $readyResponse['response'];
+            
+            // Show the response in a ResponseForm
+            $responseForm = new \Renz\AIAssistant\forms\ResponseForm($this);
+            $responseForm->sendTo($player, $question, $response);
+            
+            // Send toast notification
+            $this->getMessageManager()->sendSpecificToastNotification($player, "view_response_ready");
+        } else {
+            // No ready response found - return to main menu
+            $mainForm = new \Renz\AIAssistant\forms\MainForm($this);
+            $mainForm->sendTo($player);
+        }
+    }
+    
     // Removed callback handling methods - using simpler synchronous approach now
 }

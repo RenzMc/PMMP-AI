@@ -336,13 +336,13 @@ class AnthropicProvider implements AIProvider {
         
         // Check for HTTP errors
         if (isset($result['error'])) {
-            $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: Anthropic API error: " . $result['error']);
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.anthropic_api_error", ["error" => $result['error']]));
             return;
         }
         
         $response = $result['response'] ?? '';
         if (empty($response)) {
-            $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: Empty response from Anthropic API");
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.anthropic_empty_response"));
             return;
         }
         
@@ -369,17 +369,17 @@ class AnthropicProvider implements AIProvider {
                 $this->plugin->getConversationManager()->addConversation($playerName, $query, $aiResponse);
                 
                 // Send response to player
-                $player->sendMessage(MinecraftTextFormatter::COLOR_GREEN . "Claude: " . MinecraftTextFormatter::COLOR_WHITE . $aiResponse);
+                $player->sendMessage($this->plugin->getMessageManager()->formatAIResponse($aiResponse));
                 
             } else {
                 if ($this->plugin->isDebugEnabled() && isset($responseData["error"])) {
                     $this->plugin->getLogger()->debug("Anthropic API error: " . json_encode($responseData["error"]));
                 }
-                $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: I couldn't generate a response. Please try again later.");
+                $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.anthropic_generation_failed"));
             }
         } catch (\Exception $e) {
             $this->plugin->getLogger()->error("Anthropic response parsing error: " . $e->getMessage());
-            $player->sendMessage(MinecraftTextFormatter::COLOR_RED . "ERROR: Error processing Anthropic response.");
+            $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.anthropic_processing_error"));
         }
     }
 
