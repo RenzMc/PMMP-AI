@@ -94,7 +94,7 @@ class TokenShopForm {
             $this->sendTo($player);
         });
         
-        // Get form title and content from forms config
+        // Get form title and content
         $title = $this->plugin->getFormSetting("token_shop_form.title", "Token Shop");
         $content = $this->plugin->getFormSetting("token_shop_form.content", "Purchase AI tokens to use the AI Assistant:");
         
@@ -114,18 +114,18 @@ class TokenShopForm {
         $tokenManager = $this->plugin->getTokenManager();
         $tokenStatus = $tokenManager->getTokenStatusMessage($player->getName());
         
-        // Format content with text formatting from config
+        // Format content
         $highlightFormat = $this->plugin->getFormSetting("general.text_formatting.highlight", "&e");
+        $balanceFormat = $this->plugin->getFormSetting("general.text_formatting.balance", "&b");
         $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&7");
-        $infoFormat = $this->plugin->getFormSetting("general.text_formatting.info", "&b");
         
-        $content = TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n") . 
-                  TextFormat::colorize($infoFormat . "Your Balance: " . $currencySymbol . $playerMoney . "\n\n") .
-                  TextFormat::colorize($contentFormat . $content);
+        $content = TextFormat::colorize($highlightFormat . $tokenStatus . "\n\n" . 
+                  $balanceFormat . "Your Balance: " . $currencySymbol . $playerMoney . "\n\n" .
+                  $contentFormat . $content);
         
         $form->setContent($content);
         
-        // Add back button from config
+        // Add back button
         $backText = $this->plugin->getFormSetting("token_shop_form.buttons.back.text", "Back");
         $backColor = $this->plugin->getFormSetting("token_shop_form.buttons.back.color", "&7");
         $backTexture = $this->plugin->getFormSetting("token_shop_form.buttons.back.texture", "textures/ui/arrow_left");
@@ -146,7 +146,12 @@ class TokenShopForm {
         $form->sendToPlayer($player);
         
         // Send toast notification when token shop is opened
-        $this->plugin->getMessageManager()->sendToastNotification($player, "info", $this->plugin->getMessageManager()->getConfigurableMessage("toasts.token_shop.welcome_title"), $this->plugin->getMessageManager()->getConfigurableMessage("toasts.token_shop.welcome_body"));
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "info",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.token_shop.welcome_title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.token_shop.welcome_body")
+        );
     }
     
     /**

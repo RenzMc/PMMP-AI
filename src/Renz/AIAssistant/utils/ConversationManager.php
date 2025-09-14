@@ -36,7 +36,9 @@ class ConversationManager {
         // Create history directory if it doesn't exist  
         $historyDir = $plugin->getDataFolder() . "history/";  
         if (!is_dir($historyDir)) {  
-            @mkdir($historyDir, 0777, true);  
+            if (!mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
+                $plugin->getLogger()->error("Failed to create history directory: " . $historyDir);
+            }
         }  
     }  
   
@@ -93,14 +95,22 @@ class ConversationManager {
             return;  
         }  
           
-        // Save the conversation to file  
-        $filePath = $this->getConversationFilePath($playerName, $sessionId);  
-        $config = new Config($filePath, Config::JSON);  
-        $config->setAll($this->conversations[$playerName][$sessionId]);  
-        $config->save();  
-          
-        // Update session metadata  
-        $this->updateSessionMetadata($playerName, $sessionId);  
+        try {
+            // Save the conversation to file  
+            $filePath = $this->getConversationFilePath($playerName, $sessionId);  
+            $config = new Config($filePath, Config::JSON);  
+            $config->setAll($this->conversations[$playerName][$sessionId]);  
+            $config->save();  
+              
+            // Update session metadata  
+            $this->updateSessionMetadata($playerName, $sessionId);
+            
+            if ($this->plugin->isDebugEnabled()) {
+                $this->plugin->getLogger()->debug("Successfully saved conversation for player {$playerName}, session {$sessionId}");
+            }
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Failed to save conversation for player {$playerName}, session {$sessionId}: " . $e->getMessage());
+        }
     }  
   
     /**  
@@ -196,7 +206,9 @@ class ConversationManager {
     private function getConversationFilePath(string $playerName, string $sessionId): string {  
         $playerDir = $this->plugin->getDataFolder() . "history/" . strtolower($playerName) . "/";  
         if (!is_dir($playerDir)) {  
-            @mkdir($playerDir, 0777, true);  
+            if (!mkdir($playerDir, 0777, true) && !is_dir($playerDir)) {
+                $this->plugin->getLogger()->error("Failed to create player directory: " . $playerDir);
+            }
         }  
         return $playerDir . $sessionId . ".json";  
     }  
@@ -208,8 +220,8 @@ class ConversationManager {
      * @return string The new session ID  
      */  
     public function createNewSession(string $playerName): string {  
-        // Generate a new session ID with microseconds for better uniqueness
-        $sessionId = date("Ymd_His") . "_" . substr(md5(uniqid(microtime(true), true)), 0, 8);  
+        // Generate a new session ID  
+        $sessionId = date("Ymd_His") . "_" . substr(md5(uniqid()), 0, 8);  
           
         // Initialize the sessions array for this player if it doesn't exist  
         if (!isset($this->sessions[$playerName])) {  
@@ -232,13 +244,12 @@ class ConversationManager {
           
         // Limit the number of sessions  
         if (count($this->sessions[$playerName]["sessions"]) > $this->maxSessions) {  
-            // Find the oldest session that's not the current one 
+            // Find the oldest session  
             $oldestSession = null;  
             $oldestTime = PHP_INT_MAX;  
               
             foreach ($this->sessions[$playerName]["sessions"] as $id => $session) {  
-                // Don't delete the session we just created or the current session
-                if ($id !== $sessionId && $id !== $this->sessions[$playerName]["current"] && $session["last_used"] < $oldestTime) {  
+                if ($session["last_used"] < $oldestTime) {  
                     $oldestTime = $session["last_used"];  
                     $oldestSession = $id;  
                 }  
@@ -248,18 +259,11 @@ class ConversationManager {
             if ($oldestSession !== null) {  
                 unset($this->sessions[$playerName]["sessions"][$oldestSession]);  
                   
-                // Also remove the conversation file with better error handling
+                // Also remove the conversation file  
                 $filePath = $this->getConversationFilePath($playerName, $oldestSession);  
                 if (file_exists($filePath)) {  
-                    if (!@unlink($filePath)) {
-                        $this->plugin->getLogger()->warning("Failed to delete old conversation file: {$filePath}");
-                    }
+                    @unlink($filePath);  
                 }  
-                
-                // Remove from memory if loaded
-                if (isset($this->conversations[$playerName][$oldestSession])) {
-                    unset($this->conversations[$playerName][$oldestSession]);
-                }
             }  
         }  
           
@@ -339,15 +343,25 @@ class ConversationManager {
      * @param string $playerName  
      */  
     private function saveSessionsMetadata(string $playerName): void {  
-        $playerDir = $this->plugin->getDataFolder() . "history/" . strtolower($playerName) . "/";  
-        if (!is_dir($playerDir)) {  
-            @mkdir($playerDir, 0777, true);  
-        }  
-          
-        $filePath = $playerDir . "sessions.json";  
-        $config = new Config($filePath, Config::JSON);  
-        $config->setAll($this->sessions[$playerName]);  
-        $config->save();  
+        try {
+            $playerDir = $this->plugin->getDataFolder() . "history/" . strtolower($playerName) . "/";  
+            if (!is_dir($playerDir)) {  
+                if (!mkdir($playerDir, 0777, true) && !is_dir($playerDir)) {
+                    throw new \RuntimeException("Failed to create player directory: " . $playerDir);
+                }
+            }  
+              
+            $filePath = $playerDir . "sessions.json";  
+            $config = new Config($filePath, Config::JSON);  
+            $config->setAll($this->sessions[$playerName]);  
+            $config->save();
+            
+            if ($this->plugin->isDebugEnabled()) {
+                $this->plugin->getLogger()->debug("Successfully saved session metadata for player {$playerName}");
+            }
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Failed to save session metadata for player {$playerName}: " . $e->getMessage());
+        }
     }  
   
     /**  
@@ -451,18 +465,18 @@ class ConversationManager {
             if (empty($this->sessions[$playerName]["sessions"])) {  
                 $this->sessions[$playerName]["current"] = "";  
             } else {  
-                // Find the most recently used session (excluding the one being deleted)
+                // Find the most recently used session  
                 $mostRecentSession = null;  
                 $mostRecentTime = 0;  
                   
                 foreach ($this->sessions[$playerName]["sessions"] as $id => $session) {  
-                    if ($id !== $sessionId && $session["last_used"] > $mostRecentTime) {  
+                    if ($session["last_used"] > $mostRecentTime) {  
                         $mostRecentTime = $session["last_used"];  
                         $mostRecentSession = $id;  
                     }  
                 }  
                   
-                $this->sessions[$playerName]["current"] = $mostRecentSession ?? "";  
+                $this->sessions[$playerName]["current"] = $mostRecentSession;  
             }  
         }  
           
@@ -596,5 +610,38 @@ class ConversationManager {
         }  
           
         return false;  
-    }  
+    }
+
+    /**
+     * Get session messages for a player
+     * 
+     * @param string $playerName
+     * @param string $sessionId
+     * @return array
+     */
+    public function getSessionMessages(string $playerName, string $sessionId): array {
+        // Load the conversation if it's not already loaded
+        if (!isset($this->conversations[$playerName][$sessionId])) {
+            $this->loadConversation($playerName, $sessionId);
+        }
+        
+        // Format the messages for display
+        $messages = [];
+        foreach ($this->conversations[$playerName][$sessionId] as $message) {
+            $messages[] = [
+                'question' => $message['query'] ?? '',
+                'response' => $message['response'] ?? '',
+                'timestamp' => $message['timestamp'] ?? time()
+            ];
+        }
+        
+        return $messages;
+    }
+
+    /**
+     * Save all conversations
+     */
+    public function saveConversations(): void {
+        $this->saveAllConversations();
+    }
 }

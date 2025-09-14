@@ -201,12 +201,16 @@ class HistoryForm {
         $contentFormat = $this->plugin->getFormSetting("general.text_formatting.content", "&f");
         
         $content = "";
-        foreach ($messages as $message) {
-            $content .= TextFormat::colorize($highlightFormat . "Question: ") . 
-                       TextFormat::colorize($contentFormat . $message['question'] . "\n\n") .
-                       TextFormat::colorize($highlightFormat . "Response: ") . 
-                       TextFormat::colorize($contentFormat . $message['response'] . "\n\n") .
-                       "----------------------------------------\n\n";
+        if (empty($messages)) {
+            $content = TextFormat::colorize($contentFormat . "No messages in this conversation yet.");
+        } else {
+            foreach ($messages as $message) {
+                $content .= TextFormat::colorize($highlightFormat . "Question: ") . 
+                           TextFormat::colorize($contentFormat . $message['question'] . "\n\n") .
+                           TextFormat::colorize($highlightFormat . "Response: ") . 
+                           TextFormat::colorize($contentFormat . $message['response'] . "\n\n") .
+                           "----------------------------------------\n\n";
+            }
         }
         
         $form->setContent($content);

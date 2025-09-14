@@ -32,9 +32,8 @@ class MainForm {
         // Check if "View Response" button should be shown and build dynamic button mapping
         $requestManager = $this->plugin->getRequestManager();
         $hasReadyResponse = $requestManager->hasReadyResponse($player->getName());
-        $viewResponseEnabled = $this->plugin->getFormSetting("main_form.buttons.view_response.enabled", true);
-        $globalViewResponseEnabled = $this->plugin->getConfig()->getNested("advanced.view_response_button.enabled", true);
-        $showViewResponseButton = $hasReadyResponse && $viewResponseEnabled && $globalViewResponseEnabled;
+        $viewResponseEnabled = $this->plugin->getConfig()->getNested("advanced.view_response_button.enabled", true);
+        $showViewResponseButton = $hasReadyResponse && $viewResponseEnabled;
         
         // Build button mapping - adjust indices based on whether View Response is shown
         $buttonMap = [];
@@ -52,7 +51,6 @@ class MainForm {
         $buttonMap[$buttonIndex++] = 'building';      // Building Calculator
         $buttonMap[$buttonIndex++] = 'token_shop';    // Token Shop
         $buttonMap[$buttonIndex++] = 'server_info';   // Server Info
-        $buttonMap[$buttonIndex++] = 'settings';      // Settings
 
         $form = new SimpleForm(function(Player $player, ?int $data) use (&$buttonMap) {
             if ($data === null) {
@@ -92,14 +90,10 @@ class MainForm {
                     $serverInfoForm = new ServerInfoForm($this->plugin);
                     $serverInfoForm->sendTo($player);
                     break;
-
-                case 'settings':
-                    $this->openSettingsForm($player);
-                    break;
             }
         });
 
-        // Get form settings from forms.yml
+        // Get form settings from config
         $title = $this->plugin->getFormSetting("main_form.title", "AI Assistant");
         $content = $this->plugin->getFormSetting("main_form.content", "Welcome to the AI Assistant! What would you like to do?");
 
@@ -155,20 +149,14 @@ class MainForm {
         $serverInfoTexture = $this->plugin->getFormSetting("main_form.buttons.server_info.texture", "textures/ui/info_icon");
         $form->addButton($this->plugin->formatFormText($serverInfoColor . $serverInfoText), 0, $serverInfoTexture);
 
-        // Settings button
-        $settingsText = $this->plugin->getFormSetting("main_form.buttons.settings.text", "Settings");
-        $settingsColor = $this->plugin->getFormSetting("main_form.buttons.settings.color", "&c");
-        $settingsTexture = $this->plugin->getFormSetting("main_form.buttons.settings.texture", "textures/ui/settings_icon");
-        $form->addButton($this->plugin->formatFormText($settingsColor . $settingsText), 0, $settingsTexture);
-
         $form->sendToPlayer($player);
         
         // Send toast notification
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.title", []),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.body", [])
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.body")
         );
     }
 
@@ -184,8 +172,8 @@ class MainForm {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title", []),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body", [])
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title"),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body")
             );
             return;
         }
@@ -196,8 +184,8 @@ class MainForm {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.request_active.title", []),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.request_active.body", [])
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.request_active.title"),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.request_active.body")
             );
             return;
         }
@@ -215,8 +203,8 @@ class MainForm {
                 $this->plugin->getMessageManager()->sendToastNotification(
                     $player,
                     "error",
-                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.no_question_title", []),
-                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.no_question_body", [])
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.no_question_title"),
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.no_question_body")
                 );
                 return;
             }
@@ -252,7 +240,7 @@ class MainForm {
             }
         });
 
-        // Get form settings from forms.yml
+        // Get form settings from config
         $title = $this->plugin->getFormSetting("chat_form.title", "Chat with AI");
         $content = $this->plugin->getFormSetting("chat_form.content", "What would you like to ask the AI Assistant?");
         $placeholder = $this->plugin->getFormSetting("chat_form.placeholder", "Type your question here...");
@@ -269,8 +257,8 @@ class MainForm {
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_title", []),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_body", [])
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.chat.welcome_body")
         );
     }
 
@@ -286,8 +274,8 @@ class MainForm {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title", []),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body", [])
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title"),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body")
             );
             return;
         }
@@ -306,8 +294,8 @@ class MainForm {
                 $this->plugin->getMessageManager()->sendToastNotification(
                     $player,
                     "error",
-                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_title", []),
-                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_body", [])
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_title"),
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_body")
                 );
                 return;
             }
@@ -335,7 +323,7 @@ class MainForm {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "info",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.title"),
                 $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.body", ["item" => $itemName])
             );
 
@@ -350,11 +338,15 @@ class MainForm {
         });
 
         // Get form settings
-        $title = "Crafting Helper";
-        $content = "Enter the name of the item you want to craft:";
-        $placeholder = "e.g., diamond sword, crafting table, etc.";
+        $title = $this->plugin->getFormSetting("crafting_form.title", "Crafting Helper");
+        $content = $this->plugin->getFormSetting("crafting_form.content", "Enter the name of the item you want to craft:");
+        $placeholder = $this->plugin->getFormSetting("crafting_form.placeholder", "e.g., diamond sword, crafting table, etc.");
 
-        $form->setTitle(TextFormat::colorize("&l&bCrafting Helper"));
+        // Format title with proper colors
+        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
+        $title = $this->plugin->formatFormText($titleFormat . $title);
+
+        $form->setTitle($title);
         $form->addInput($content, $placeholder);
         $form->sendToPlayer($player);
 
@@ -362,8 +354,8 @@ class MainForm {
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title", []),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body", [])
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body")
         );
     }
 
@@ -379,8 +371,8 @@ class MainForm {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title", []),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body", [])
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title"),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body")
             );
             return;
         }
@@ -400,7 +392,7 @@ class MainForm {
             $material = trim($data[3] ?? "");
 
             if ($width <= 0 || $height <= 0 || $depth <= 0 || empty($material)) {
-                $player->sendMessage(TextFormat::RED . "Please enter valid dimensions and material.");
+                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.invalid_dimensions");
                 return;
             }
 
@@ -441,54 +433,37 @@ class MainForm {
             }
         });
 
+        // Get form settings
+        $title = $this->plugin->getFormSetting("building_form.title", "Building Calculator");
+        $widthLabel = $this->plugin->getFormSetting("building_form.width_label", "Width (blocks):");
+        $heightLabel = $this->plugin->getFormSetting("building_form.height_label", "Height (blocks):");
+        $depthLabel = $this->plugin->getFormSetting("building_form.depth_label", "Depth (blocks):");
+        $materialLabel = $this->plugin->getFormSetting("building_form.material_label", "Main Material:");
+        
+        $widthPlaceholder = $this->plugin->getFormSetting("building_form.width_placeholder", "e.g., 10");
+        $heightPlaceholder = $this->plugin->getFormSetting("building_form.height_placeholder", "e.g., 5");
+        $depthPlaceholder = $this->plugin->getFormSetting("building_form.depth_placeholder", "e.g., 8");
+        $materialPlaceholder = $this->plugin->getFormSetting("building_form.material_placeholder", "e.g., stone, wood, etc.");
+
+        // Format title with proper colors
+        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
+        $title = $this->plugin->formatFormText($titleFormat . $title);
+
         // Set form title and content
-        $form->setTitle(TextFormat::colorize("&l&bBuilding Calculator"));
-        $form->addInput("Width (blocks):", "e.g., 10");
-        $form->addInput("Height (blocks):", "e.g., 5");
-        $form->addInput("Depth (blocks):", "e.g., 8");
-        $form->addInput("Main Material:", "e.g., stone, wood, etc.");
+        $form->setTitle($title);
+        $form->addInput($widthLabel, $widthPlaceholder);
+        $form->addInput($heightLabel, $heightPlaceholder);
+        $form->addInput($depthLabel, $depthPlaceholder);
+        $form->addInput($materialLabel, $materialPlaceholder);
         $form->sendToPlayer($player);
 
         // Send toast notification
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_title", []),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_body", [])
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.welcome_body")
         );
-    }
-
-    /**
-     * Open the settings form for a player
-     * 
-     * @param Player $player
-     */
-    private function openSettingsForm(Player $player): void {
-        // Check if player has permission
-        if (!$player->hasPermission("aiassistant.settings")) {
-            $this->plugin->getMessageManager()->sendToastNotification(
-                $player,
-                "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.no_permission.title", []),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.no_permission.body", [])
-            );
-            return;
-        }
-
-        // Create the settings form
-        $form = new SimpleForm(function(Player $player, ?int $data) {
-            if ($data === null) {
-                return;
-            }
-
-            // Return to main menu
-            $this->sendTo($player);
-        });
-
-        $form->setTitle(TextFormat::colorize("&l&bSettings"));
-        $form->setContent("Settings are currently only available through commands.\n\nUse /ai provider list to see available providers.\nUse /ai provider set <name> to change the default provider.");
-        $form->addButton(TextFormat::colorize("&9Back to Main Menu"), 0, "textures/ui/arrow_left");
-        $form->sendToPlayer($player);
     }
 
     /**
@@ -553,7 +528,7 @@ class MainForm {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.defaults.title", []),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.defaults.title"),
                 "No response available to view."
             );
             

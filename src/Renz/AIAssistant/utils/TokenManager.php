@@ -35,15 +35,18 @@ class TokenManager {
         $this->enabled = (bool) $plugin->getConfig()->getNested("tokens.enabled", true);
         $this->freeDailyTokens = (int) $plugin->getConfig()->getNested("tokens.free_daily_tokens", 3);
         
-        // Create data directory if it doesn't exist
+        // Create data directory if it doesn't exist - Fixed: Better directory handling
         $tokensDir = $plugin->getDataFolder() . "tokens/";
         if (!is_dir($tokensDir)) {
-            // Use recursive directory creation with error handling
-            if (!@mkdir($tokensDir, 0777, true) && !is_dir($tokensDir)) {
+            // Use recursive directory creation with proper error handling
+            if (!@mkdir($tokensDir, 0755, true) && !is_dir($tokensDir)) {
                 $plugin->getLogger()->error("Failed to create tokens directory: " . $tokensDir);
-                // Create a fallback directory in the main plugin folder
+                // Fallback to main plugin directory
                 $tokensDir = $plugin->getDataFolder();
                 $plugin->getLogger()->info("Using fallback directory for token data: " . $tokensDir);
+            } else {
+                // Set proper permissions after creation
+                @chmod($tokensDir, 0755);
             }
         }
         
@@ -137,30 +140,43 @@ class TokenManager {
                 }
             }
             
-            // Double check file permissions
+            // Double check file permissions - Fixed: Better permission handling
             $filePath = $this->tokenData->getPath();
             $dirPath = dirname($filePath);
             
-            // Ensure directory is writable
-            if (!is_writable($dirPath) && !@chmod($dirPath, 0777)) {
-                $this->plugin->getLogger()->warning("Token directory is not writable: " . $dirPath);
+            // Ensure directory is writable with proper permissions
+            if (!is_writable($dirPath)) {
+                @chmod($dirPath, 0755);
+                if (!is_writable($dirPath)) {
+                    $this->plugin->getLogger()->warning("Token directory is not writable: " . $dirPath);
+                }
             }
             
-            // Save with error handling
-            if (!$this->tokenData->save()) {
-                $this->plugin->getLogger()->error("Failed to save token data for player: " . $playerName);
+            // Ensure the file itself is writable if it exists
+            if (file_exists($filePath) && !is_writable($filePath)) {
+                @chmod($filePath, 0644);
+            }
+            
+            // Save with proper error handling - Fixed: Config::save() returns void!
+            try {
+                $this->tokenData->save();
+                return true;
+            } catch (\Throwable $e) {
+                $this->plugin->getLogger()->error("Failed to save token data for player: " . $playerName . " - " . $e->getMessage());
                 
                 // Try to save to a different location as last resort
-                $emergencyPath = $this->plugin->getDataFolder() . "emergency_token_data.yml";
-                $emergencyConfig = new Config($emergencyPath, Config::YAML);
-                $emergencyConfig->setAll(["players" => $players]);
-                if ($emergencyConfig->save()) {
+                try {
+                    $emergencyPath = $this->plugin->getDataFolder() . "emergency_token_data.yml";
+                    $emergencyConfig = new Config($emergencyPath, Config::YAML);
+                    $emergencyConfig->setAll(["players" => $players]);
+                    $emergencyConfig->save();
                     $this->plugin->getLogger()->info("Saved token data to emergency location: " . $emergencyPath);
                     $this->tokenData = $emergencyConfig; // Use this config from now on
                     return true;
+                } catch (\Throwable $emergencyError) {
+                    $this->plugin->getLogger()->error("Emergency save also failed: " . $emergencyError->getMessage());
+                    return false;
                 }
-                
-                return false;
             }
             
             return true;
@@ -311,55 +327,70 @@ class TokenManager {
         return "You have {$purchasedTokens} purchased tokens and {$freeTokensLeft} free daily tokens left.";
     }
 
-    /**
-     * Log token usage
-     * 
-     * @param string $playerName
-     * @param string $tokenType
-     * @return bool Success status
-     */
-    private function logTokenUsage(string $playerName, string $tokenType): bool {
-        try {
-            $usage = $this->usageData->get("usage", []);
-            $date = date("Y-m-d");
-            
-            if (!isset($usage[$date])) {
-                $usage[$date] = [];
-            }
-            
-            if (!isset($usage[$date][$playerName])) {
-                $usage[$date][$playerName] = [
-                    "free" => 0,
-                    "purchased" => 0
-                ];
-            }
-            
-            $usage[$date][$playerName][$tokenType]++;
-            
-            // Update in memory
-            $this->usageData->set("usage", $usage);
-            
-            // Ensure the directory exists before saving
-            $usageDir = dirname($this->usageData->getPath());
-            if (!is_dir($usageDir)) {
-                if (!@mkdir($usageDir, 0777, true) && !is_dir($usageDir)) {
-                    $this->plugin->getLogger()->error("Failed to create usage data directory: " . $usageDir);
-                    return false;
-                }
-            }
-            
-            // Save with error handling
-            if (!$this->usageData->save()) {
-                $this->plugin->getLogger()->error("Failed to save token usage data for player: " . $playerName);
+   /**
+ * Log token usage
+ *
+ * @param string $playerName
+ * @param string $tokenType
+ * @return bool Success status
+ */
+   private function logTokenUsage(string $playerName, string $tokenType): bool {
+    try {
+        $usage = $this->usageData->get("usage", []);
+        $date = date("Y-m-d");
+
+        if (!isset($usage[$date])) {
+            $usage[$date] = [];
+        }
+
+        if (!isset($usage[$date][$playerName])) {
+            $usage[$date][$playerName] = [
+                "free" => 0,
+                "purchased" => 0
+            ];
+        }
+
+        $usage[$date][$playerName][$tokenType]++;
+
+        // Update in memory
+        $this->usageData->set("usage", $usage);
+
+        // Ensure the directory exists before saving
+        $usagePath = $this->usageData->getPath();
+        $usageDir = $usagePath !== null ? dirname($usagePath) : $this->plugin->getDataFolder();
+        if (!is_dir($usageDir)) {
+            if (!@mkdir($usageDir, 0755, true) && !is_dir($usageDir)) {
+                $this->plugin->getLogger()->error("Failed to create usage data directory: " . $usageDir);
                 return false;
             }
-            
+        }
+
+        // Save with proper try/catch (Config::save() is void)
+        try {
+            $this->usageData->save();
             return true;
         } catch (\Throwable $e) {
-            $this->plugin->getLogger()->error("Error logging token usage: " . $e->getMessage());
-            return false;
+            $this->plugin->getLogger()->error("Failed to save token usage data for player: " . $playerName . " - " . $e->getMessage());
+
+            // Fallback: try emergency save to plugin data folder
+            try {
+                $emergencyPath = $this->plugin->getDataFolder() . "emergency_usage_data.yml";
+                $emergencyConfig = new Config($emergencyPath, Config::YAML, ["usage" => $usage]);
+                $emergencyConfig->set("usage", $usage);
+                $emergencyConfig->save();
+                $this->usageData = $emergencyConfig;
+                $this->plugin->getLogger()->info("Saved usage data to emergency location: " . $emergencyPath);
+                return true;
+            } catch (\Throwable $emergencyError) {
+                $this->plugin->getLogger()->error("Emergency usage save also failed: " . $emergencyError->getMessage());
+                return false;
+            }
         }
+    } catch (\Throwable $e) {
+        $this->plugin->getLogger()->error("Error logging token usage: " . $e->getMessage());
+        return false;
     }
+}
 
     /**
      * Get token usage for a specific date

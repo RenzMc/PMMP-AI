@@ -61,7 +61,6 @@ class RequestManager {
      * 
      * @param string $playerName
      * @param string $requestId
-     * @param string $response
      * @return void
      */
     public function completeRequest(string $playerName, string $requestId): void {
@@ -108,6 +107,16 @@ class RequestManager {
     }
 
     /**
+     * Backwards-compatible alias for older code that calls cancelPlayerRequests()
+     *
+     * @param string $playerName
+     * @return bool
+     */
+    public function cancelPlayerRequests(string $playerName): bool {
+        return $this->cancelRequest($playerName);
+    }
+
+    /**
      * Check if a player has an active request
      * 
      * @param string $playerName
@@ -139,20 +148,30 @@ class RequestManager {
 
     /**
      * Generate a unique request ID
+     * Accepts any prefix (will be cast to string) to avoid uniqid() errors.
      * 
+     * @param mixed|null $prefix
+     * @param bool $moreEntropy
      * @return string
      */
-    public function generateRequestId(): string {
-        return uniqid('req_', true);
+    public function generateRequestId($prefix = null, bool $moreEntropy = true): string {
+        if ($prefix === null) {
+            return uniqid('req_', $moreEntropy);
+        }
+
+        // Cast prefix to string to ensure uniqid() always receives a string.
+        return uniqid((string)$prefix, $moreEntropy);
     }
 
     /**
      * Clean up old cancelled requests
+     * Accepts non-int input and casts to int to prevent type errors.
      * 
-     * @param int $maxAge Maximum age in seconds
+     * @param mixed $maxAge Maximum age in seconds
      * @return void
      */
-    public function cleanupCancelledRequests(int $maxAge = 3600): void {
+    public function cleanupCancelledRequests($maxAge = 3600): void {
+        $maxAge = (int)$maxAge;
         $now = microtime(true);
         foreach ($this->cancelledRequests as $requestId => $request) {
             if ($now - $request['cancelTime'] > $maxAge) {

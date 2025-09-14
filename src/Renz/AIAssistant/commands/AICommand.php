@@ -107,7 +107,7 @@ class AICommand extends Command {
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_anthropic");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_google");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.provider_local");
-            $player->sendMessage("");
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "help.separator");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.usage_format");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.usage_example");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.note_anthropic_local");
@@ -155,7 +155,12 @@ class AICommand extends Command {
         $config->setNested("api_providers.default_provider", $providerName);
         $config->save();
         
-        // Reload providers
+        // Reload all configurations - Fixed: Must reload PocketMine's config first!
+        $this->plugin->getConfig()->reload();
+        $this->plugin->getPluginConfig()->reload();
+        $this->plugin->getFormsConfig()->reload();
+        $this->plugin->getServerFeaturesConfig()->reload();
+        $this->plugin->getMessageManager()->reloadMessages();
         $this->plugin->getProviderManager()->reloadProviders();
         
         $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.config_success", ["provider" => $providerName, "model" => $modelName]);
@@ -278,7 +283,8 @@ class AICommand extends Command {
         }
         
         // First cancel any existing requests to ensure clean state
-        $requestManager->cancelPlayerRequests($player->getName());
+        // FIX: Use cancelRequest instead of cancelPlayerRequests
+        $requestManager->cancelRequest($player->getName());
         
         $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.processing_query");
         

@@ -25,6 +25,7 @@ use Renz\AIAssistant\utils\ServerFeatureManager;
 use Renz\AIAssistant\utils\TokenManager;
 use Renz\AIAssistant\utils\RequestManager;
 use Renz\AIAssistant\economy\EconomyManager;
+use Renz\AIAssistant\forms\ResponseForm;
 
 class Main extends PluginBase implements Listener {
     /** @var Config */
@@ -32,6 +33,9 @@ class Main extends PluginBase implements Listener {
     
     /** @var Config */
     private Config $formsConfig;
+    
+    /** @var Config */
+    private Config $serverFeaturesConfig;
     
     /** @var AIProviderManager */
     private AIProviderManager $providerManager;
@@ -73,6 +77,36 @@ class Main extends PluginBase implements Listener {
      * Called when the plugin is loaded
      */
     protected function onLoad(): void {
+        // Save default resources
+        $this->saveResource("config.yml");
+        $this->saveResource("forms.yml");
+        $this->saveResource("fiturserver.yml");
+        $this->saveResource("cacert.pem");
+        
+        // Initialize configs
+        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+        $this->formsConfig = new Config($this->getDataFolder() . "forms.yml", Config::YAML);
+        $this->serverFeaturesConfig = new Config($this->getDataFolder() . "fiturserver.yml", Config::YAML);
+        
+        // Set debug mode
+        $this->debug = $this->config->getNested("advanced.debug", false);
+        
+        // Set up CA certificate for SSL connections
+        $cainfo = $this->getDataFolder() . "cacert.pem";
+        $this->cainfo_path = $cainfo;
+        if (file_exists($cainfo)) {
+            $this->_cainfo_resource = fopen($cainfo, "r");
+            if ($this->_cainfo_resource) {
+                if ($this->debug) {
+                    $this->getLogger()->debug("Loaded CA certificate for SSL connections");
+                }
+            } else {
+                $this->getLogger()->warning("Failed to open CA certificate file");
+            }
+        } else {
+            $this->getLogger()->warning("CA certificate file not found");
+        }
+        
         $this->getLogger()->info(TextFormat::WHITE . "AI Assistant plugin is loading...");
     }
 
@@ -87,29 +121,6 @@ class Main extends PluginBase implements Listener {
             return;
         }
         
-        // Create default config if it doesn't exist
-        $this->saveDefaultConfig();
-        $this->config = $this->getConfig();
-        
-        // Ensure forms.yml exists and is properly loaded
-        if (!file_exists($this->getDataFolder() . "forms.yml")) {
-            $this->getLogger()->info("forms.yml not found, creating default configuration");
-            $this->saveResource("forms.yml", true);
-        }
-        $this->formsConfig = new Config($this->getDataFolder() . "forms.yml", Config::YAML);
-        
-        // Ensure fiturserver.yml exists and is properly loaded
-        if (!file_exists($this->getDataFolder() . "fiturserver.yml")) {
-            $this->getLogger()->info("fiturserver.yml not found, creating default configuration");
-            $this->saveResource("fiturserver.yml", true);
-        }
-        
-        // Load debug mode setting
-        $this->debug = (bool) $this->config->getNested("advanced.debug", false);
-        
-        // Setup SSL certificate (like reference code)
-        $this->setupSSLCertificate();
-        
         // Initialize components
         $this->initializeComponents();
         
@@ -122,7 +133,9 @@ class Main extends PluginBase implements Listener {
         // Schedule tasks
         $this->scheduleTasks();
         
-        $this->getLogger()->info(TextFormat::GREEN . "AI Assistant plugin has been enabled!");
+        // Log startup
+        $this->getLogger()->info(TextFormat::GREEN . "PMMP-AI Assistant enabled!");
+        $this->getLogger()->info(TextFormat::YELLOW . "Using " . $this->providerManager->getDefaultProvider() . " as the default AI provider");
     }
 
     /**
@@ -130,7 +143,7 @@ class Main extends PluginBase implements Listener {
      */
     protected function onDisable(): void {
         // Save any pending data
-        $this->conversationManager->saveAllConversations();
+        $this->conversationManager->saveConversations();
         
         // Clean up SSL certificate resource
         if (isset($this->_cainfo_resource)) {
@@ -142,52 +155,9 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Setup SSL certificate for secure HTTPS requests (like reference code)
-     */
-    private function setupSSLCertificate(): void {
-        try {
-            // Read cacert.pem from resources
-            $resource = $this->getResource("cacert.pem");
-            if ($resource === null) {
-                throw new \RuntimeException("cacert.pem resource not found");
-            }
-            
-            $contents = stream_get_contents($resource);
-            fclose($resource);
-            
-            // Create temporary file for CA certificate
-            $resource = tmpfile();
-            if ($resource === false) {
-                throw new \RuntimeException("Failed to create temporary file for CA certificate");
-            }
-            
-            fwrite($resource, $contents);
-            $this->cainfo_path = stream_get_meta_data($resource)["uri"];
-            $this->_cainfo_resource = $resource;
-            
-            $this->getLogger()->info("SSL certificate loaded successfully");
-        } catch (\Exception $e) {
-            $this->getLogger()->error("Failed to setup SSL certificate: " . $e->getMessage());
-            $this->getLogger()->warning("HTTPS requests may fail without proper SSL setup");
-        }
-    }
-    
-    /**
      * Initialize all plugin components
      */
     private function initializeComponents(): void {
-        // Initialize request manager
-        $this->requestManager = new RequestManager($this);
-        
-        // Initialize economy manager
-        $this->economyManager = new EconomyManager($this);
-        
-        // Initialize token manager
-        $this->tokenManager = new TokenManager($this);
-        
-        // Initialize provider manager
-        $this->providerManager = new AIProviderManager($this);
-        
         // Initialize message manager
         $this->messageManager = new MessageManager($this);
         
@@ -200,6 +170,18 @@ class Main extends PluginBase implements Listener {
         // Initialize server feature manager
         $this->serverFeatureManager = new ServerFeatureManager($this);
         
+        // Initialize request manager
+        $this->requestManager = new RequestManager($this);
+        
+        // Initialize provider manager
+        $this->providerManager = new AIProviderManager($this);
+        
+        // Initialize token manager
+        $this->tokenManager = new TokenManager($this);
+        
+        // Initialize economy manager
+        $this->economyManager = new EconomyManager($this);
+        
         // Log initialization if debug mode is enabled
         if ($this->debug) {
             $this->getLogger()->debug("All components initialized successfully");
@@ -211,13 +193,9 @@ class Main extends PluginBase implements Listener {
      */
     private function scheduleTasks(): void {
         // Schedule tip broadcast task if enabled
-        if ($this->config->getNested("messages.tips_enabled", true)) {
-            $interval = (int) $this->config->getNested("messages.tips_interval", 900);
-            $this->getScheduler()->scheduleRepeatingTask(new TipBroadcastTask($this), $interval * 20); // Convert to ticks
-            
-            if ($this->debug) {
-                $this->getLogger()->debug("Scheduled tip broadcast task with interval: {$interval} seconds");
-            }
+        $tipInterval = $this->config->getNested("messages.tips_interval", 900);
+        if ($tipInterval > 0 && $this->config->getNested("messages.tips_enabled", true)) {
+            $this->getScheduler()->scheduleRepeatingTask(new TipBroadcastTask($this), $tipInterval * 20);
         }
         
         // Schedule cleanup task for cancelled requests
@@ -278,7 +256,34 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the AI Provider Manager instance
+     * Get the plugin configuration
+     * 
+     * @return Config
+     */
+    public function getPluginConfig(): Config {
+        return $this->config;
+    }
+
+    /**
+     * Get the forms configuration
+     * 
+     * @return Config
+     */
+    public function getFormsConfig(): Config {
+        return $this->formsConfig;
+    }
+
+    /**
+     * Get the server features configuration
+     * 
+     * @return Config
+     */
+    public function getServerFeaturesConfig(): Config {
+        return $this->serverFeaturesConfig;
+    }
+
+    /**
+     * Get the AI provider manager
      * 
      * @return AIProviderManager
      */
@@ -287,16 +292,7 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the Message Manager instance
-     * 
-     * @return MessageManager
-     */
-    public function getMessageManager(): MessageManager {
-        return $this->messageManager;
-    }
-
-    /**
-     * Get the Conversation Manager instance
+     * Get the conversation manager
      * 
      * @return ConversationManager
      */
@@ -305,7 +301,16 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the Server Info Provider instance
+     * Get the message manager
+     * 
+     * @return MessageManager
+     */
+    public function getMessageManager(): MessageManager {
+        return $this->messageManager;
+    }
+
+    /**
+     * Get the server info provider
      * 
      * @return ServerInfoProvider
      */
@@ -314,7 +319,7 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the Server Feature Manager instance
+     * Get the server feature manager
      * 
      * @return ServerFeatureManager
      */
@@ -323,7 +328,7 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the Token Manager instance
+     * Get the token manager
      * 
      * @return TokenManager
      */
@@ -332,16 +337,16 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the Economy Manager instance
+     * Get the economy manager
      * 
      * @return EconomyManager
      */
     public function getEconomyManager(): EconomyManager {
         return $this->economyManager;
     }
-    
+
     /**
-     * Get the Request Manager instance
+     * Get the request manager
      * 
      * @return RequestManager
      */
@@ -350,32 +355,6 @@ class Main extends PluginBase implements Listener {
     }
 
     /**
-     * Get the Forms Config instance
-     * 
-     * @return Config
-     */
-    public function getFormsConfig(): Config {
-        return $this->formsConfig;
-    }
-    
-    /**
-     * Save the Forms Config
-     * 
-     * @return void
-     */
-    public function saveFormsConfig(): void {
-        if ($this->formsConfig instanceof Config) {
-            $this->formsConfig->save();
-            if ($this->debug) {
-                $this->getLogger()->debug("Forms configuration saved successfully");
-            }
-        } else {
-            $this->getLogger()->warning("Failed to save forms configuration: Config instance not found");
-        }
-    }
-
-    
-    /**
      * Check if debug mode is enabled
      * 
      * @return bool
@@ -383,36 +362,32 @@ class Main extends PluginBase implements Listener {
     public function isDebugEnabled(): bool {
         return $this->debug;
     }
-    
+
     /**
-     * Save the plugin configuration
+     * Get the CA certificate resource
      * 
-     * @return void
+     * @return resource|null
      */
-    public function saveConfig(): void {
-        parent::saveConfig();
-        
-        if ($this->debug) {
-            $this->getLogger()->debug("Plugin configuration saved successfully");
-        }
+    public function getCAInfoResource() {
+        return $this->_cainfo_resource;
     }
     
     /**
-     * Get a form setting from the forms configuration
+     * Get a form setting from the forms config
      * 
-     * @param string $path The path to the setting
-     * @param mixed $default The default value if the setting doesn't exist
-     * @return mixed The setting value
+     * @param string $key The setting key in dot notation
+     * @param mixed $default Default value if setting doesn't exist
+     * @return mixed
      */
-    public function getFormSetting(string $path, $default = null) {
-        return $this->formsConfig->getNested($path, $default);
+    public function getFormSetting(string $key, $default = null) {
+        return $this->formsConfig->getNested($key, $default);
     }
     
     /**
-     * Process text formatting using the forms configuration
+     * Format form text with color codes
      * 
-     * @param string $text The text to format
-     * @return string The formatted text
+     * @param string $text
+     * @return string
      */
     public function formatFormText(string $text): string {
         // Replace color placeholders with actual color codes
@@ -425,26 +400,24 @@ class Main extends PluginBase implements Listener {
     }
     
     /**
-     * Check if the global "View Response" button should be shown for a player
+     * Check if the global view response button should be shown
      * 
      * @param Player $player
      * @return bool
      */
-    public function shouldShowGlobalViewResponseButton(Player $player): bool {
+    public function shouldShowGlobalViewResponseButton(\pocketmine\player\Player $player): bool {
         $requestManager = $this->getRequestManager();
         $hasReadyResponse = $requestManager->hasReadyResponse($player->getName());
-        $globalEnabled = $this->getConfig()->getNested("advanced.view_response_button.enabled", true);
-        
-        return $hasReadyResponse && $globalEnabled;
+        $viewResponseEnabled = $this->getConfig()->getNested("advanced.view_response_button.enabled", true);
+        return $hasReadyResponse && $viewResponseEnabled;
     }
     
     /**
-     * Handle the global "View Response" button action
+     * Handle global view response button click
      * 
      * @param Player $player
-     * @return void
      */
-    public function handleGlobalViewResponse(Player $player): void {
+    public function handleGlobalViewResponse(\pocketmine\player\Player $player): void {
         $requestManager = $this->getRequestManager();
         $readyResponse = $requestManager->consumeReadyResponse($player->getName());
         
@@ -453,17 +426,19 @@ class Main extends PluginBase implements Listener {
             $response = $readyResponse['response'];
             
             // Show the response in a ResponseForm
-            $responseForm = new \Renz\AIAssistant\forms\ResponseForm($this);
+            $responseForm = new ResponseForm($this);
             $responseForm->sendTo($player, $question, $response);
             
             // Send toast notification
-            $this->getMessageManager()->sendSpecificToastNotification($player, "view_response_ready");
+            $this->getMessageManager()->sendSpecificToastNotification($player, "response_ready");
         } else {
-            // No ready response found - return to main menu
-            $mainForm = new \Renz\AIAssistant\forms\MainForm($this);
-            $mainForm->sendTo($player);
+            // No ready response found - this shouldn't happen but handle gracefully
+            $this->getMessageManager()->sendToastNotification(
+                $player,
+                "error",
+                $this->getMessageManager()->getConfigurableMessage("toasts.defaults.title"),
+                "No response available to view."
+            );
         }
     }
-    
-    // Removed callback handling methods - using simpler synchronous approach now
 }

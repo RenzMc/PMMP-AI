@@ -272,31 +272,30 @@ class AIProviderManager {
             return $this->getFallbackResponse($query);  
         }  
           
-        try {  
-            // Get conversation history  
-            $conversationManager = $this->plugin->getConversationManager();  
-            $conversationHistory = $player !== null ? $conversationManager->getConversation($playerName) : [];  
-              
-            // Get server info if enabled  
-            $serverInfo = "";  
-            if ($config->getNested("prompts.include_server_info", true)) {  
-                $serverInfo = $player !== null ?   
-                    $this->plugin->getServerInfoProvider()->getServerInfoForPrompt($player) :   
-                    $this->plugin->getServerInfoProvider()->getServerInfoForPrompt();  
-            }  
-              
-            // Get server features if enabled  
-            $serverFeatures = "";  
-            if ($config->getNested("prompts.include_server_features", true)) {  
-                // Get relevant features based on the query - use getRelevantFeatures() which already returns formatted string  
-                $serverFeatures = $this->plugin->getServerFeatureManager()->getRelevantFeatures($query);  
-            }  
-              
-            // Get the system prompt  
-            $systemPrompt = $this->getSystemPrompt();  
-              
-            // Add Minecraft formatting instructions to the system prompt  
-            $systemPrompt .= "\n\nIMPORTANT: Format your responses using Minecraft color and formatting codes instead of Markdown. Use the following codes:  
+        // Prepare common data needed for all provider attempts
+        $conversationManager = $this->plugin->getConversationManager();  
+        $conversationHistory = $player !== null ? $conversationManager->getConversation($playerName) : [];  
+          
+        // Get server info if enabled  
+        $serverInfo = "";  
+        if ($config->getNested("prompts.include_server_info", true)) {  
+            $serverInfo = $player !== null ?   
+                $this->plugin->getServerInfoProvider()->getServerInfoForPrompt($player) :   
+                $this->plugin->getServerInfoProvider()->getServerInfoForPrompt();  
+        }  
+          
+        // Get server features if enabled  
+        $serverFeatures = "";  
+        if ($config->getNested("prompts.include_server_features", true)) {  
+            // Get relevant features based on the query - use getRelevantFeatures() which already returns formatted string  
+            $serverFeatures = $this->plugin->getServerFeatureManager()->getRelevantFeatures($query);  
+        }  
+          
+        // Get the system prompt  
+        $systemPrompt = $this->getSystemPrompt();  
+          
+        // Add Minecraft formatting instructions to the system prompt  
+        $systemPrompt .= "\n\nIMPORTANT: Format your responses using Minecraft color and formatting codes instead of Markdown. Use the following codes:  
 - §0 to §f for colors (§6 for gold headers, §e for yellow subheadings, §f for white text)  
 - §l for bold text  
 - §o for italic text  
@@ -309,58 +308,108 @@ Example formatting:
 §e[Subheading]§r  
 §f[Regular text]  
   
-DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft formatting codes.";  
-              
-            // Process the query with the selected provider using new async architecture  
-            $provider = $this->providers[$providerName];  
-              
-            // Check if provider has new buildHttpRequest method (new architecture)  
-            if (method_exists($provider, 'buildHttpRequest')) {  
-                $response = $this->processAsyncRequest($provider, $player, $query, $conversationHistory, $systemPrompt, $serverInfo, $serverFeatures, $requestId);  
-            } else {  
-                // Fallback to legacy synchronous method  
-                $response = $provider->generateResponse($query, $conversationHistory, $systemPrompt, $serverInfo, $serverFeatures);  
-            }  
-              
-            // Check if the request was cancelled  
-            if ($this->requestManager->isRequestCancelled($requestId)) {  
-                if ($this->plugin->isDebugEnabled()) {  
-                    $this->plugin->getLogger()->debug("Request {$requestId} was cancelled, but response was already generated");  
-                }  
-                  
-                // Return a cancelled message if the player is still online  
-                if ($player !== null && $player->isOnline()) {  
-                    return TextFormat::YELLOW . "AI request was cancelled, but a response was already generated:\n\n" . $response;  
-                }  
-            }  
-              
-            // Add the query and response to conversation history if player exists  
-            if ($player !== null) {  
-                $conversationManager->addToConversation($playerName, $query, $response);  
-            }  
-              
-            // Cache the response if caching is enabled  
-            if ($useCaching) {  
-                $this->cache->cacheResponse($query, $response);  
-            }  
-              
-            // Log the interaction if enabled  
-            if ($config->getNested("advanced.log_interactions", true)) {  
-                $this->plugin->getLogger()->info("AI Interaction - Player: {$playerName}, Query: " . substr($query, 0, 30) . "...");  
-            }  
-              
-            // Mark the request as complete  
-            $this->requestManager->completeRequest($playerName, $requestId);  
-              
-            return $response;  
-        } catch (\Throwable $e) {  
-            $this->plugin->getLogger()->error("Error processing AI query: " . $e->getMessage());  
-              
-            // Mark the request as complete  
-            $this->requestManager->completeRequest($playerName, $requestId);  
-              
-            return TextFormat::RED . "An error occurred while processing your request. Please try again later.";  
-        }  
+DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft formatting codes.";
+
+        // Create a list of providers to try, starting with the selected provider
+        $providersToTry = [$providerName];
+        
+        // Add other available providers as fallbacks (excluding the already selected one)
+        foreach (array_keys($this->providers) as $availableProvider) {
+            if ($availableProvider !== $providerName && isset($this->providers[$availableProvider]) && $this->providers[$availableProvider]->isConfigured()) {
+                $providersToTry[] = $availableProvider;
+            }
+        }
+        
+        // Track errors for debugging
+        $errors = [];
+        
+        // Try each provider in sequence until one succeeds
+        foreach ($providersToTry as $currentProviderName) {
+            if (!isset($this->providers[$currentProviderName])) {
+                continue; // Skip if provider doesn't exist
+            }
+            
+            $provider = $this->providers[$currentProviderName];
+            
+            // Skip providers that aren't properly configured
+            if (!$provider->isConfigured()) {
+                continue;
+            }
+            
+            try {
+                // Log which provider we're trying
+                if ($this->plugin->isDebugEnabled()) {
+                    $this->plugin->getLogger()->debug("Attempting to use provider: {$currentProviderName}");
+                }
+                
+                // Process the query with the current provider
+                if (method_exists($provider, 'buildHttpRequest')) {
+                    $response = $this->processAsyncRequest($provider, $player, $query, $conversationHistory, $systemPrompt, $serverInfo, $serverFeatures, $requestId);
+                } else {
+                    // Fallback to legacy synchronous method
+                    $response = $provider->generateResponse($query, $conversationHistory, $systemPrompt, $serverInfo, $serverFeatures);
+                }
+                
+                // Check if the request was cancelled
+                if ($this->requestManager->isRequestCancelled($requestId)) {
+                    if ($this->plugin->isDebugEnabled()) {
+                        $this->plugin->getLogger()->debug("Request {$requestId} was cancelled, but response was already generated");
+                    }
+                    
+                    // Return a cancelled message if the player is still online
+                    if ($player !== null && $player->isOnline()) {
+                        return TextFormat::YELLOW . "AI request was cancelled, but a response was already generated:\n\n" . $response;
+                    }
+                }
+                
+                // If we got here, the provider succeeded
+                if ($currentProviderName !== $providerName) {
+                    $this->plugin->getLogger()->info("Successfully switched from provider '{$providerName}' to '{$currentProviderName}' after failure");
+                    
+                    // Notify the player that we switched providers (only if it's not the original provider)
+                    if ($player !== null && $player->isOnline()) {
+                        $response = TextFormat::YELLOW . "[Note: Switched to {$provider->getName()} provider due to an issue with the primary provider]\n\n" . $response;
+                    }
+                }
+                
+                // Add the query and response to conversation history if player exists
+                if ($player !== null) {
+                    $conversationManager->addToConversation($playerName, $query, $response);
+                }
+                
+                // Cache the response if caching is enabled
+                if ($useCaching) {
+                    $this->cache->cacheResponse($query, $response);
+                }
+                
+                // Log the interaction if enabled
+                if ($config->getNested("advanced.log_interactions", true)) {
+                    $this->plugin->getLogger()->info("AI Interaction - Player: {$playerName}, Query: " . substr($query, 0, 30) . "...");
+                }
+                
+                // Mark the request as complete
+                $this->requestManager->completeRequest($playerName, $requestId);
+                
+                return $response;
+                
+            } catch (\Throwable $e) {
+                // Log the error for this provider
+                $errorMsg = "Error with provider '{$currentProviderName}': " . $e->getMessage();
+                $this->plugin->getLogger()->warning($errorMsg);
+                $errors[$currentProviderName] = $errorMsg;
+                
+                // Continue to the next provider
+                continue;
+            }
+        }
+        
+        // If we get here, all providers failed
+        $this->plugin->getLogger()->error("All providers failed for query. Errors: " . json_encode($errors));
+        
+        // Mark the request as complete
+        $this->requestManager->completeRequest($playerName, $requestId);
+        
+        return TextFormat::RED . "All available AI providers failed to process your request. Please try again later.";  
     }  
   
     /**  
@@ -506,15 +555,51 @@ DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft format
         $httpResponse = $result['response'] ?? '';  
         $parsedResponse = $provider->parseResponse($httpResponse, $result);  
           
-        if (!$parsedResponse['success']) {  
-            if ($player !== null) {  
-                $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.generic_error", ["error" => $parsedResponse['error']]));  
-            }  
-              
-            // Clear form context and complete request on error  
-            $this->requestManager->clearFormContext($playerName);  
-            $this->requestManager->completeRequest($playerName, $requestId);  
-            return;  
+        if (!$parsedResponse['success']) {
+            // Provider failed to parse the response, try to find another provider
+            $this->plugin->getLogger()->warning("Provider '{$providerName}' failed to parse response: " . ($parsedResponse['error'] ?? 'Unknown error'));
+            
+            // Get a list of alternative providers (excluding the one that just failed)
+            $alternativeProviders = [];
+            foreach ($this->providers as $name => $providerInstance) {
+                if ($name !== $normalizedProviderName && $providerInstance->isConfigured() && method_exists($providerInstance, 'parseResponse')) {
+                    $alternativeProviders[$name] = $providerInstance;
+                }
+            }
+            
+            // Try each alternative provider
+            foreach ($alternativeProviders as $altName => $altProvider) {
+                try {
+                    $this->plugin->getLogger()->info("Attempting to parse response with alternative provider: {$altName}");
+                    $altParsedResponse = $altProvider->parseResponse($httpResponse, $result);
+                    
+                    if ($altParsedResponse['success']) {
+                        // Alternative provider successfully parsed the response
+                        $this->plugin->getLogger()->info("Successfully parsed response with alternative provider: {$altName}");
+                        $parsedResponse = $altParsedResponse;
+                        $provider = $altProvider;
+                        $providerName = $altName;
+                        
+                        // Break out of the loop since we found a working provider
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    $this->plugin->getLogger()->warning("Alternative provider '{$altName}' also failed: " . $e->getMessage());
+                    // Continue to the next alternative provider
+                }
+            }
+            
+            // If all providers failed, send error message and return
+            if (!$parsedResponse['success']) {
+                if ($player !== null) {  
+                    $player->sendMessage($this->plugin->getMessageManager()->getConfigurableMessage("provider_errors.generic_error", ["error" => $parsedResponse['error']]));  
+                }  
+                  
+                // Clear form context and complete request on error  
+                $this->requestManager->clearFormContext($playerName);  
+                $this->requestManager->completeRequest($playerName, $requestId);  
+                return;
+            }
         }  
           
         $aiResponse = $parsedResponse['content'];  

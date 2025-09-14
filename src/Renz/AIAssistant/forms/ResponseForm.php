@@ -390,12 +390,12 @@ class ResponseForm {
         // Create a new session
         $sessionId = $this->plugin->getConversationManager()->createNewSession($player->getName());
         
-        // FIXED: Pass array as second parameter instead of string
+        // Fixed: Pass string as second parameter
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_title", []),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_body", [])
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.session.new_session_body")
         );
         
         // Open MainForm for the new session instead of ChatForm

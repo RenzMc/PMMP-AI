@@ -23,7 +23,7 @@ class HttpRequestTask {
     private float $timeout;
     private string $cainfo_path;
     private int $retryCount = 0;
-    private int $maxRetries = 2;
+    private int $maxRetries = 3;
     private ?Main $plugin = null;
 
     public function __construct(string $url, array $headers, object $callbackObject, string $methodName, string $method = "GET", string $body = "", string $requestId = "", int $timeout = 30, string $cainfo_path = "") {
@@ -43,6 +43,33 @@ class HttpRequestTask {
 
         // Start the bulk curl task immediately when constructed
         $this->execute();
+    }
+
+    /**
+     * Mask Authorization header value for safe logging
+     */
+    private function maskHeadersForLog(array $headers): array {
+        $out = [];
+        foreach ($headers as $k => $v) {
+            // Headers may be given as "Key: value" strings or as assoc ["Key" => "value"]
+            if (is_int($k)) {
+                $line = $v;
+                if (stripos($line, 'authorization:') === 0) {
+                    $out[] = 'Authorization: Bearer <REDACTED>';
+                } else {
+                    $out[] = $line;
+                }
+            } else {
+                $key = $k;
+                $val = $v;
+                if (strtolower($key) === 'authorization') {
+                    $out[] = $key . ': Bearer <REDACTED>';
+                } else {
+                    $out[] = $key . ': ' . $val;
+                }
+            }
+        }
+        return $out;
     }
 
     /**
@@ -98,26 +125,50 @@ class HttpRequestTask {
         // Prepare extra curl options (PocketMine BulkCurlTask compatible)
         $extraOpts = [
             CURLOPT_TIMEOUT => (int)$this->timeout,
-            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_CONNECTTIMEOUT => 15,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1, // Force HTTP/1.1 for stability
             CURLOPT_USERAGENT => 'PocketMine-AI-Assistant/1.0',
             CURLOPT_RETURNTRANSFER => true,
-            // Let PocketMine handle header parsing automatically
+            // SSL/TLS optimizations untuk mengatasi SSL_ERROR_SYSCALL
+            CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2, // Force TLS 1.2+
+            CURLOPT_SSL_CIPHER_LIST => 'ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS',
+            // Connection optimizations
+            CURLOPT_TCP_NODELAY => 1,
+            CURLOPT_FORBID_REUSE => false, // Allow connection reuse
+            CURLOPT_FRESH_CONNECT => false, // Don't force fresh connection
         ];
 
-        // SSL options - always enable for HTTPS
+        // SSL options - always enable for HTTPS dengan perbaikan SSL_ERROR_SYSCALL
         if (strpos($this->url, 'https://') === 0) {
             $extraOpts[CURLOPT_SSL_VERIFYPEER] = true;
             $extraOpts[CURLOPT_SSL_VERIFYHOST] = 2;
-
+            
             // Set CA certificate path if provided and exists
             if (!empty($this->cainfo_path) && file_exists($this->cainfo_path)) {
                 $extraOpts[CURLOPT_CAINFO] = $this->cainfo_path;
+            } else {
+                // Fallback CA bundle path untuk sistem yang tidak memiliki CA bundle
+                $possibleCaPaths = [
+                    '/etc/ssl/certs/ca-certificates.crt', // Debian/Ubuntu
+                    '/etc/pki/tls/certs/ca-bundle.crt',   // RHEL/CentOS
+                    '/usr/local/share/certs/ca-root-nss.crt', // FreeBSD
+                    '/etc/ssl/cert.pem', // OpenBSD
+                ];
+                
+                foreach ($possibleCaPaths as $caPath) {
+                    if (file_exists($caPath)) {
+                        $extraOpts[CURLOPT_CAINFO] = $caPath;
+                        break;
+                    }
+                }
             }
+            
+            // Additional SSL error handling
+            $extraOpts[CURLOPT_SSL_SESSIONID_CACHE] = false; // Disable SSL session cache
         } else {
-            // For HTTP requests, disable SSL verification (not recommended, but kept for completeness)
+            // For HTTP requests, disable SSL verification
             $extraOpts[CURLOPT_SSL_VERIFYPEER] = false;
             $extraOpts[CURLOPT_SSL_VERIFYHOST] = 0;
         }
@@ -133,9 +184,6 @@ class HttpRequestTask {
         if ($this->retryCount > 0 && strpos($this->url, 'openrouter.ai') !== false) {
             $extraOpts[CURLOPT_RESOLVE] = ["openrouter.ai:443:104.18.3.115"]; // Use known IP as fallback
         }
-
-        // Remove any conflicting options and ensure compatibility
-        unset($extraOpts[CURLOPT_HTTPHEADER]); // BulkCurlTask handles headers separately
 
         // Configure request method and body
         if ($this->requestMethod === "POST") {
@@ -238,11 +286,11 @@ class HttpRequestTask {
             return;
         }
 
-        // InternetException objects - retry on DNS/connection errors
+        // InternetException objects - retry on DNS/connection errors including SSL errors
         if ($result instanceof InternetException) {
             $errorMsg = $result->getMessage();
             
-            // Retry on DNS or connection failures
+            // Retry on DNS, connection failures, or SSL errors
             if ($this->shouldRetry($errorMsg, 0)) {
                 $this->retry();
                 return;
@@ -258,6 +306,12 @@ class HttpRequestTask {
 
         // If result is an array with error information (common)
         if (is_array($result) && isset($result['error'])) {
+            // Check if it's an SSL error that should be retried
+            if ($this->shouldRetry($result['error'], 0)) {
+                $this->retry();
+                return;
+            }
+            
             $this->triggerCallback([
                 'requestId' => $this->requestId,
                 'error' => $result['error'],
@@ -361,6 +415,16 @@ class HttpRequestTask {
         // Retry on connection timeouts
         if (stripos($errorMsg, 'timeout') !== false || 
             stripos($errorMsg, 'operation timed out') !== false) {
+            return true;
+        }
+        
+        // Retry on SSL errors (SSL_ERROR_SYSCALL, SSL_read errors, etc.)
+        if (stripos($errorMsg, 'ssl_read') !== false ||
+            stripos($errorMsg, 'ssl_error_syscall') !== false ||
+            stripos($errorMsg, 'ssl handshake') !== false ||
+            stripos($errorMsg, 'ssl connect error') !== false ||
+            stripos($errorMsg, 'ssl connection') !== false ||
+            stripos($errorMsg, 'openssl') !== false) {
             return true;
         }
         

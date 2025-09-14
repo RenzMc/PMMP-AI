@@ -123,6 +123,7 @@ messages:
     enter_question_generic: "§cPlease enter a question."
     enter_item_generic: "§cPlease enter an item name."
     generation_failed: "§cFailed to generate AI response. Please try again."
+    invalid_dimensions: "§cPlease enter valid dimensions and material."
     ai_timeout_error: "§cAI request timed out. Please try again with a simpler question."
     ai_connection_error: "§cFailed to connect to AI service. Please try again later."
     ai_rate_limit_error: "§cToo many requests. Please wait a moment before trying again."
@@ -156,17 +157,6 @@ messages:
       waiting_message: "Please wait while the AI generates a response..."
       toast_notice: "(Loading will be shown via Toast Notification)"
       cancel_button: "Cancel"
-    frames:
-      - "⠋ Generating response..."
-      - "⠙ Generating response..."
-      - "⠹ Generating response..."
-      - "⠸ Generating response..."
-      - "⠼ Generating response..."
-      - "⠴ Generating response..."
-      - "⠦ Generating response..."
-      - "⠧ Generating response..."
-      - "⠇ Generating response..."
-      - "⠏ Generating response..."
       
   # Default UI messages
   ui:
@@ -296,6 +286,7 @@ messages:
     command_setup: "§e/ai setup §f- Configure AI providers (Admin only)"
     command_provider_list: "§e/ai provider list §f- List available AI providers"
     command_provider_set: "§e/ai provider set <name> §f- Set the default AI provider"
+    separator: ""
     
   # Provider list messages
   providers:
