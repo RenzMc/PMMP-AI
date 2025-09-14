@@ -191,13 +191,31 @@ class MainForm {
         }
 
         // Create the chat form
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+        // Track form data for dynamic elements
+        $formData = [
+            'has_view_response_button' => false
+        ];
+        
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) use (&$formData) {
             if ($data === null) {
                 // Form closed
                 return;
             }
+            
+            // Check if the View Response button was added and clicked
+            if (isset($formData['has_view_response_button']) && $formData['has_view_response_button']) {
+                // The view response toggle is the last element in the form
+                $lastIndex = count($data) - 1;
+                $viewResponseClicked = $data[$lastIndex] ?? false;
+                
+                if ($viewResponseClicked) {
+                    // User clicked the View Response button
+                    $this->viewReadyResponse($player);
+                    return;
+                }
+            }
 
-            // Get the question from the form data
+            // Get the question from the form data - always the first element
             $question = trim($data[0] ?? "");
             if (empty($question)) {
                 $this->plugin->getMessageManager()->sendToastNotification(
@@ -251,6 +269,10 @@ class MainForm {
 
         $form->setTitle($title);
         $form->addInput($content, $placeholder);
+        
+        // Add View Response button if there's a ready response
+        $this->addViewResponseButton($form, $player, $formData);
+        
         $form->sendToPlayer($player);
 
         // Send toast notification
@@ -281,11 +303,29 @@ class MainForm {
         }
 
         // Create the crafting form
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+        // Track form data for dynamic elements
+        $formData = [
+            'has_view_response_button' => false
+        ];
+        
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) use (&$formData) {
             if ($data === null) {
                 // Form closed
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.crafting_lookup_cancelled");
                 return;
+            }
+            
+            // Check if the View Response button was added and clicked
+            if (isset($formData['has_view_response_button']) && $formData['has_view_response_button']) {
+                // The view response toggle is the last element in the form
+                $lastIndex = count($data) - 1;
+                $viewResponseClicked = $data[$lastIndex] ?? false;
+                
+                if ($viewResponseClicked) {
+                    // User clicked the View Response button
+                    $this->viewReadyResponse($player);
+                    return;
+                }
             }
 
             // Get the item name from the form data
@@ -348,6 +388,10 @@ class MainForm {
 
         $form->setTitle($title);
         $form->addInput($content, $placeholder);
+        
+        // Add View Response button if there's a ready response
+        $this->addViewResponseButton($form, $player, $formData);
+        
         $form->sendToPlayer($player);
 
         // Send toast notification
@@ -378,11 +422,29 @@ class MainForm {
         }
 
         // Create the building calculator form
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+        // Track form data for dynamic elements
+        $formData = [
+            'has_view_response_button' => false
+        ];
+        
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) use (&$formData) {
             if ($data === null) {
                 // Form closed
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.building_calc_cancelled");
                 return;
+            }
+            
+            // Check if the View Response button was added and clicked
+            if (isset($formData['has_view_response_button']) && $formData['has_view_response_button']) {
+                // The view response toggle is the last element in the form
+                $lastIndex = count($data) - 1;
+                $viewResponseClicked = $data[$lastIndex] ?? false;
+                
+                if ($viewResponseClicked) {
+                    // User clicked the View Response button
+                    $this->viewReadyResponse($player);
+                    return;
+                }
             }
 
             // Get the dimensions from the form data
@@ -455,6 +517,10 @@ class MainForm {
         $form->addInput($heightLabel, $heightPlaceholder);
         $form->addInput($depthLabel, $depthPlaceholder);
         $form->addInput($materialLabel, $materialPlaceholder);
+        
+        // Add View Response button if there's a ready response
+        $this->addViewResponseButton($form, $player, $formData);
+        
         $form->sendToPlayer($player);
 
         // Send toast notification
@@ -535,5 +601,30 @@ class MainForm {
             // Return to main menu
             $this->sendTo($player);
         }
+    }
+    
+    /**
+     * Add a "View Response" button to a form if a response is ready
+     * 
+     * @param \jojoe77777\FormAPI\CustomForm $form
+     * @param Player $player
+     * @param array $formData Reference to form data array
+     * @return bool True if button was added
+     */
+    private function addViewResponseButton(\jojoe77777\FormAPI\CustomForm $form, Player $player, array &$formData): bool {
+        $requestManager = $this->plugin->getRequestManager();
+        
+        // Check if there's a ready response for this player
+        if ($requestManager->hasReadyResponse($player->getName())) {
+            // Add a toggle button to view the response
+            $viewResponseText = $this->plugin->getFormSetting("response_form.buttons.view_response.text", "View Ready Response");
+            $form->addToggle($viewResponseText, false);
+            
+            // Track that we added the button
+            $formData['has_view_response_button'] = true;
+            return true;
+        }
+        
+        return false;
     }
 }

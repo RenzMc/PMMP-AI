@@ -632,69 +632,70 @@ DO NOT use Markdown formatting like #, ##, *, _, or `. Use ONLY Minecraft format
     }  
       
     /**  
-     * Handle form-specific response logic  
-     *   
-     * @param Player $player  
-     * @param array $formContext  
-     * @param string $query  
-     * @param string $aiResponse  
-     */  
-    private function handleFormResponse(Player $player, array $formContext, string $query, string $aiResponse): void {  
-        $tokenManager = $formContext['tokenManager'];  
-        $playerName = $player->getName();  
-          
-        // Deduct token if enabled (only after successful response)  
-        if ($tokenManager->isEnabled()) {  
-            $tokenManager->useToken($player);  
-        }  
-          
-        // Send appropriate success notification based on form type  
-        switch ($formContext['type']) {  
-            case 'crafting_form':  
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "recipe_found");  
-                break;  
-            case 'building_form':  
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "calculation_complete");  
-                break;  
-            default:  
-                $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "response_ready");  
-                break;  
-        }  
-          
-        // Clear form context  
-        $this->requestManager->clearFormContext($playerName);  
-          
-        // Store ready response for "View Response" button functionality
-        $this->requestManager->setReadyResponse($playerName, $query, $aiResponse);
-        
-        // Get configuration for auto-show behavior
-        $config = $this->plugin->getConfig();
-        $autoShowEnabled = $config->getNested("advanced.view_response_button.enabled", true);
-        $autoShowDelay = (int) $config->getNested("advanced.view_response_button.auto_show_delay", 3);
-        $showToastNotification = $config->getNested("advanced.view_response_button.show_toast_notification", true);
-        
-        // Send new toast notification if enabled
-        if ($showToastNotification) {
-            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "view_response_ready");
-        }
-        
-        // Show response form with configurable delay, but only if auto-show is enabled
-        if ($autoShowEnabled) {
-            $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(  
-                function() use ($player, $query, $aiResponse): void {  
-                    if ($player->isOnline()) {
-                        // Check if the response is still available (player might have viewed it already)
-                        if ($this->requestManager->hasReadyResponse($player->getName())) {
-                            $form = new \Renz\AIAssistant\forms\ResponseForm($this->plugin);  
-                            $form->sendTo($player, $query, $aiResponse);
-                            // Clear the ready response since we're showing it now
-                            $this->requestManager->clearReadyResponse($player->getName());
-                        }
-                    }  
-                }  
-            ), $autoShowDelay * 20); // Convert to ticks
-        }  
+ * Handle form-specific response logic  
+ *   
+ * @param Player $player  
+ * @param array $formContext  
+ * @param string $query  
+ * @param string $aiResponse  
+ */  
+   private function handleFormResponse(Player $player, array $formContext, string $query, string $aiResponse): void {  
+    $tokenManager = $formContext['tokenManager'];  
+    $playerName = $player->getName();  
+      
+    // Deduct token if enabled (only after successful response)  
+    if ($tokenManager->isEnabled()) {  
+        $tokenManager->useToken($player);  
     }  
+      
+    // Send appropriate success notification based on form type  
+    switch ($formContext['type']) {  
+        case 'crafting_form':  
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "recipe_found");  
+            break;  
+        case 'building_form':  
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "calculation_complete");  
+            break;  
+        default:  
+            $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "response_ready");  
+            break;  
+    }  
+      
+    // Clear form context  
+    $this->requestManager->clearFormContext($playerName);  
+      
+    // Store ready response for "View Response" button functionality
+    // Always store the response even if we're going to show it automatically
+    $this->requestManager->setReadyResponse($playerName, $query, $aiResponse);
+    
+    // Get configuration for auto-show behavior
+    $config = $this->plugin->getConfig();
+    $autoShowEnabled = $config->getNested("advanced.view_response_button.enabled", true);
+    $autoShowDelay = (int) $config->getNested("advanced.view_response_button.auto_show_delay", 3);
+    $showToastNotification = $config->getNested("advanced.view_response_button.show_toast_notification", true);
+    
+    // Send new toast notification if enabled
+    if ($showToastNotification) {
+        $this->plugin->getMessageManager()->sendSpecificToastNotification($player, "view_response_ready");
+    }
+    
+    // Show response form with configurable delay if auto-show is enabled
+    if ($autoShowEnabled) {
+        $this->plugin->getScheduler()->scheduleDelayedTask(new \pocketmine\scheduler\ClosureTask(
+            function() use ($player, $query, $aiResponse): void {
+                if ($player->isOnline()) {
+                    // Check if the response is still available (player might have viewed it already)
+                    if ($this->requestManager->hasReadyResponse($player->getName())) {
+                        $form = new \Renz\AIAssistant\forms\ResponseForm($this->plugin);
+                        $form->sendTo($player, $query, $aiResponse);
+                        // Don't clear the ready response here - we'll keep it available for the button
+                        // This way if they close the form, they can still access it via the button
+                    }
+                }
+            }
+        ), $autoShowDelay * 20); // Convert to ticks
+    }
+}
   
     /**  
      * Handle direct command response from async AI providers  

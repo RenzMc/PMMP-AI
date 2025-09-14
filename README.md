@@ -21,7 +21,7 @@ PMMP-AI is a powerful AI assistant plugin for PocketMine-MP servers that integra
 - **Chat History**: Save and review past conversations with the AI
 - **Fully Customizable**: Extensive configuration options for all aspects of the plugin
 - **Broadcast System**: Configurable AI tips broadcast to players
-- **HTTPS REQUEST* Asynchronous HTTPS requests with secure header masking, retries, and use PocketMine BulkCurlTask.
+- **HTTPS REQUEST** Asynchronous HTTPS requests with secure header masking, retries, and use PocketMine BulkCurlTask.
 
 ## 📋 Requirements
 

@@ -144,6 +144,8 @@ messages:
   history:
     session_not_found: "§cSession not found."
     conversation_deleted: "§aConversation deleted."
+    new_session_created: "§aNew chat session created!"
+    switched_to_session: "§aSwitched to the selected session!"
     
   # Loading messages
   loading:
