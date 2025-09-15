@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Renz\AIAssistant\forms;
 
 use jojoe77777\FormAPI\SimpleForm;
+use jojoe77777\FormAPI\CustomForm;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
@@ -111,6 +112,14 @@ class MainForm {
             $viewResponseColor = $this->plugin->getFormSetting("main_form.buttons.view_response.color", "&d");
             $viewResponseTexture = $this->plugin->getFormSetting("main_form.buttons.view_response.texture", "textures/ui/check");
             $form->addButton($this->plugin->formatFormText($viewResponseColor . $viewResponseText), 0, $viewResponseTexture);
+            
+            // Send toast notification for view response
+            $this->plugin->getMessageManager()->sendToastNotification(
+                $player,
+                "info",
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.view_response_title"),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.main_menu.view_response_body")
+            );
         }
 
         // Chat with AI button
@@ -191,28 +200,10 @@ class MainForm {
         }
 
         // Create the chat form
-        // Track form data for dynamic elements
-        $formData = [
-            'has_view_response_button' => false
-        ];
-        
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) use (&$formData) {
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
             if ($data === null) {
                 // Form closed
                 return;
-            }
-            
-            // Check if the View Response button was added and clicked
-            if (isset($formData['has_view_response_button']) && $formData['has_view_response_button']) {
-                // The view response toggle is the last element in the form
-                $lastIndex = count($data) - 1;
-                $viewResponseClicked = $data[$lastIndex] ?? false;
-                
-                if ($viewResponseClicked) {
-                    // User clicked the View Response button
-                    $this->viewReadyResponse($player);
-                    return;
-                }
             }
 
             // Get the question from the form data - always the first element
@@ -270,9 +261,6 @@ class MainForm {
         $form->setTitle($title);
         $form->addInput($content, $placeholder);
         
-        // Add View Response button if there's a ready response
-        $this->addViewResponseButton($form, $player, $formData);
-        
         $form->sendToPlayer($player);
 
         // Send toast notification
@@ -303,29 +291,11 @@ class MainForm {
         }
 
         // Create the crafting form
-        // Track form data for dynamic elements
-        $formData = [
-            'has_view_response_button' => false
-        ];
-        
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) use (&$formData) {
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
             if ($data === null) {
                 // Form closed
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.crafting_lookup_cancelled");
                 return;
-            }
-            
-            // Check if the View Response button was added and clicked
-            if (isset($formData['has_view_response_button']) && $formData['has_view_response_button']) {
-                // The view response toggle is the last element in the form
-                $lastIndex = count($data) - 1;
-                $viewResponseClicked = $data[$lastIndex] ?? false;
-                
-                if ($viewResponseClicked) {
-                    // User clicked the View Response button
-                    $this->viewReadyResponse($player);
-                    return;
-                }
             }
 
             // Get the item name from the form data
@@ -389,9 +359,6 @@ class MainForm {
         $form->setTitle($title);
         $form->addInput($content, $placeholder);
         
-        // Add View Response button if there's a ready response
-        $this->addViewResponseButton($form, $player, $formData);
-        
         $form->sendToPlayer($player);
 
         // Send toast notification
@@ -422,29 +389,11 @@ class MainForm {
         }
 
         // Create the building calculator form
-        // Track form data for dynamic elements
-        $formData = [
-            'has_view_response_button' => false
-        ];
-        
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) use (&$formData) {
+        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
             if ($data === null) {
                 // Form closed
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.building_calc_cancelled");
                 return;
-            }
-            
-            // Check if the View Response button was added and clicked
-            if (isset($formData['has_view_response_button']) && $formData['has_view_response_button']) {
-                // The view response toggle is the last element in the form
-                $lastIndex = count($data) - 1;
-                $viewResponseClicked = $data[$lastIndex] ?? false;
-                
-                if ($viewResponseClicked) {
-                    // User clicked the View Response button
-                    $this->viewReadyResponse($player);
-                    return;
-                }
             }
 
             // Get the dimensions from the form data
@@ -452,6 +401,13 @@ class MainForm {
             $height = (int)($data[1] ?? 0);
             $depth = (int)($data[2] ?? 0);
             $material = trim($data[3] ?? "");
+            $themeIndex = (int)($data[4] ?? 0);
+            
+            // Get the selected theme
+            $themes = [
+                "Modern", "Cyberpunk Japanese", "Medieval", "Fantasy", "Rustic", "Industrial", "Futuristic", "None"
+            ];
+            $selectedTheme = $themes[$themeIndex] ?? "None";
 
             if ($width <= 0 || $height <= 0 || $depth <= 0 || empty($material)) {
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.invalid_dimensions");
@@ -465,11 +421,27 @@ class MainForm {
                 return;
             }
 
-            // Construct the building query
+            // Construct the building query with theme
             $query = "I want to build a structure in Minecraft with these dimensions: width = {$width}, height = {$height}, depth = {$depth}. " .
-                     "I want to use {$material} as the main material. How many blocks do I need? " .
+                     "I want to use {$material} as the main material. ";
+                     
+            // Add theme-specific instructions
+            if ($selectedTheme !== "None") {
+                $query .= "I want to build in the {$selectedTheme} style/theme. ";
+                
+                // Send theme selected notification
+                $this->plugin->getMessageManager()->sendToastNotification(
+                    $player,
+                    "info",
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.theme_selected_title"),
+                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.building.theme_selected_body", ["theme" => $selectedTheme])
+                );
+            }
+            
+            // Complete the query
+            $query .= "How many blocks do I need? " .
                      "Please calculate the total blocks needed for walls, floor, and ceiling. " .
-                     "Also suggest any additional materials I might need for details or decoration.";
+                     "Also suggest specific blocks and decorations that would fit the " . ($selectedTheme !== "None" ? $selectedTheme . " theme" : "build") . ".";
 
             // Set form context for the request
             $requestManager = $this->plugin->getProviderManager()->getRequestManager();
@@ -481,6 +453,7 @@ class MainForm {
                     'depth' => $depth
                 ],
                 'material' => $material,
+                'theme' => $selectedTheme,
                 'question' => $query,
                 'tokenManager' => $tokenManager
             ]);
@@ -501,6 +474,7 @@ class MainForm {
         $heightLabel = $this->plugin->getFormSetting("building_form.height_label", "Height (blocks):");
         $depthLabel = $this->plugin->getFormSetting("building_form.depth_label", "Depth (blocks):");
         $materialLabel = $this->plugin->getFormSetting("building_form.material_label", "Main Material:");
+        $themeLabel = $this->plugin->getFormSetting("building_form.theme_label", "Building Theme:");
         
         $widthPlaceholder = $this->plugin->getFormSetting("building_form.width_placeholder", "e.g., 10");
         $heightPlaceholder = $this->plugin->getFormSetting("building_form.height_placeholder", "e.g., 5");
@@ -518,8 +492,11 @@ class MainForm {
         $form->addInput($depthLabel, $depthPlaceholder);
         $form->addInput($materialLabel, $materialPlaceholder);
         
-        // Add View Response button if there's a ready response
-        $this->addViewResponseButton($form, $player, $formData);
+        // Add theme dropdown
+        $themes = [
+            "Modern", "Cyberpunk Japanese", "Medieval", "Fantasy", "Rustic", "Industrial", "Futuristic", "None"
+        ];
+        $form->addDropdown($themeLabel, $themes);
         
         $form->sendToPlayer($player);
 
@@ -601,30 +578,5 @@ class MainForm {
             // Return to main menu
             $this->sendTo($player);
         }
-    }
-    
-    /**
-     * Add a "View Response" button to a form if a response is ready
-     * 
-     * @param \jojoe77777\FormAPI\CustomForm $form
-     * @param Player $player
-     * @param array $formData Reference to form data array
-     * @return bool True if button was added
-     */
-    private function addViewResponseButton(\jojoe77777\FormAPI\CustomForm $form, Player $player, array &$formData): bool {
-        $requestManager = $this->plugin->getRequestManager();
-        
-        // Check if there's a ready response for this player
-        if ($requestManager->hasReadyResponse($player->getName())) {
-            // Add a toggle button to view the response
-            $viewResponseText = $this->plugin->getFormSetting("response_form.buttons.view_response.text", "View Ready Response");
-            $form->addToggle($viewResponseText, false);
-            
-            // Track that we added the button
-            $formData['has_view_response_button'] = true;
-            return true;
-        }
-        
-        return false;
     }
 }

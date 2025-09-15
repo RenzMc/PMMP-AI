@@ -200,15 +200,11 @@ messages:
       welcome_body: "Enter dimensions for your build!"
       calculation_complete_title: "§l§aCalculation Complete"
       calculation_complete_body: "Building materials are ready!"
-      theme_selected_title: "§l§aTheme Selected"
-      theme_selected_body: "Building with {theme} theme"
       
     # Response Form toasts
     response:
       new_question_title: "§l§bNew Question"
       new_question_body: "Ask another question"
-      view_response_title: "§l§bView Response"
-      view_response_body: "Your AI response is ready to view!"
       
     # Session toasts
     session:
@@ -219,8 +215,6 @@ messages:
     main_menu:
       title: "§l§bMain Menu"
       body: "Welcome to the AI Assistant"
-      view_response_title: "§l§bView Response"
-      view_response_body: "Click to see your AI answer!"
       
     # Specific toast presets for legacy sendSpecificToastNotification calls
     presets:
@@ -388,10 +382,6 @@ notifications:
     calculation_complete:
       title: "§l§aCalculation Complete"
       body: "§fBuilding materials calculation is ready!"
-      
-    view_response:
-      title: "§l§bView Response"
-      body: "§fClick to see your AI answer!"
 
 # Server Information Settings
 server_info:

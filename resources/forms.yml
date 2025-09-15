@@ -171,3 +171,54 @@ token_shop_form:
       text: "Back"
       color: "{neutral}"
       texture: "textures/ui/arrow_left"
+
+# Building Form
+building_form:
+  title: "Building Calculator"
+  width_label: "Width (blocks):"
+  height_label: "Height (blocks):"
+  depth_label: "Depth (blocks):"
+  material_label: "Main Material:"
+  theme_label: "Building Theme:"
+  width_placeholder: "e.g., 10"
+  height_placeholder: "e.g., 5"
+  depth_placeholder: "e.g., 8"
+  material_placeholder: "e.g., stone, wood, etc."
+  themes:
+    modern:
+      name: "Modern"
+      description: "Clean lines, glass, concrete, and minimalist design"
+      blocks: ["concrete", "glass", "quartz", "smooth stone", "sea lantern"]
+    cyberpunk_japanese:
+      name: "Cyberpunk Japanese"
+      description: "Neon lights, dark base colors, Japanese-inspired architecture with futuristic elements"
+      blocks: ["black concrete", "dark prismarine", "sea lantern", "glowstone", "purple terracotta", "cyan terracotta"]
+    medieval:
+      name: "Medieval"
+      description: "Stone, wood, and rustic materials with traditional architecture"
+      blocks: ["stone bricks", "oak wood", "spruce wood", "cobblestone", "brick", "lantern"]
+    fantasy:
+      name: "Fantasy"
+      description: "Whimsical and magical elements with vibrant colors"
+      blocks: ["purpur", "prismarine", "end stone bricks", "mushroom blocks", "amethyst", "copper"]
+    rustic:
+      name: "Rustic"
+      description: "Natural materials, earthy tones, and countryside aesthetics"
+      blocks: ["spruce wood", "oak wood", "stone", "hay bales", "terracotta", "campfire"]
+    industrial:
+      name: "Industrial"
+      description: "Metal, machinery, and factory-like appearance"
+      blocks: ["iron block", "smithing table", "blast furnace", "chain", "anvil", "smoker"]
+    futuristic:
+      name: "Futuristic"
+      description: "High-tech, sleek designs with modern materials"
+      blocks: ["white concrete", "light blue glass", "sea lantern", "quartz", "end rod", "beacon"]
+  buttons:
+    calculate:
+      text: "Calculate"
+      color: "{success}"
+      texture: "textures/ui/check"
+    cancel:
+      text: "Cancel"
+      color: "{danger}"
+      texture: "textures/ui/cancel"

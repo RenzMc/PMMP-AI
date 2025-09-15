@@ -28,21 +28,12 @@ class HistoryForm {
      * @param Player $player
      */
     public function sendTo(Player $player): void {
-        // Check if View Response button should be shown
-        $showViewResponseButton = $this->plugin->shouldShowGlobalViewResponseButton($player);
-        
-        $form = new SimpleForm(function(Player $player, ?int $data) use ($showViewResponseButton) {
+        $form = new SimpleForm(function(Player $player, ?int $data) {
             if ($data === null) {
                 return;
             }
             
             $currentIndex = 0;
-            
-            // Handle View Response button if shown
-            if ($showViewResponseButton && $data === $currentIndex++) {
-                $this->plugin->handleGlobalViewResponse($player);
-                return;
-            }
             
             if ($data === $currentIndex++) {
                 // Back button pressed
@@ -62,7 +53,7 @@ class HistoryForm {
                 return;
             }
             
-            // Adjust index to account for the View Response, back button and new session button
+            // Adjust index to account for the back button and new session button
             $sessionIndex = $data - $currentIndex;
             
             // Get session ID
@@ -102,14 +93,6 @@ class HistoryForm {
             $form->setContent(TextFormat::colorize($contentFormat . $emptyMessage));
         } else {
             $form->setContent(TextFormat::colorize($contentFormat . $content));
-        }
-        
-        // Add View Response button if ready response is available
-        if ($showViewResponseButton) {
-            $viewResponseText = $this->plugin->getFormSetting("main_form.buttons.view_response.text", "View Response");
-            $viewResponseColor = $this->plugin->getFormSetting("main_form.buttons.view_response.color", "&d");
-            $viewResponseTexture = $this->plugin->getFormSetting("main_form.buttons.view_response.texture", "textures/ui/check");
-            $form->addButton($this->plugin->formatFormText($viewResponseColor . $viewResponseText), 0, $viewResponseTexture);
         }
         
         // Add back button from config
