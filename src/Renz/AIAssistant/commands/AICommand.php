@@ -7,11 +7,13 @@ namespace Renz\AIAssistant\commands;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\player\Player;
+use pocketmine\plugin\Plugin;
+use pocketmine\plugin\PluginOwned;
 use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
 use Renz\AIAssistant\forms\MainForm;
 
-class AICommand extends Command {
+class AICommand extends Command implements PluginOwned {
     /** @var Main */
     private Main $plugin;
     
@@ -23,7 +25,7 @@ class AICommand extends Command {
     public function __construct(Main $plugin) {
         $description = $plugin->getMessageManager()->getConfigurableMessage("ui.command_description");
         parent::__construct("ai", $description, "/ai", ["assistant"]);
-        $this->setPermission("aiassistant.command.ai");
+        $this->setPermission("pmmp-ai.command.ai");
         $this->plugin = $plugin;
     }
     
@@ -75,7 +77,7 @@ class AICommand extends Command {
         $this->plugin->getMessageManager()->sendConfigurableMessage($player, "help.command_clear");
         $this->plugin->getMessageManager()->sendConfigurableMessage($player, "help.command_question");
         
-        if ($player->hasPermission("aiassistant.admin")) {
+        if ($player->hasPermission("pmmp-ai.admin")) {
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "help.command_setup");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "help.command_provider_list");
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "help.command_provider_set");
@@ -92,7 +94,7 @@ class AICommand extends Command {
      * @return bool
      */
     private function handleSetupCommand(Player $player, array $args): bool {
-        if (!$player->hasPermission("aiassistant.admin")) {
+        if (!$player->hasPermission("pmmp-ai.admin")) {
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "setup.admin_only");
             return false;
         }
@@ -197,7 +199,7 @@ class AICommand extends Command {
      * @return bool
      */
     private function handleProviderCommand(Player $player, array $args): bool {
-        if (!$player->hasPermission("aiassistant.admin")) {
+        if (!$player->hasPermission("pmmp-ai.admin")) {
             $this->plugin->getMessageManager()->sendConfigurableMessage($player, "console.no_permission_providers");
             return false;
         }
@@ -423,6 +425,15 @@ class AICommand extends Command {
     private function openMainForm(Player $player): void {
         $form = new MainForm($this->plugin);
         $form->sendTo($player);
+    }
+    
+    /**
+     * Get the plugin that owns this command
+     * 
+     * @return Plugin
+     */
+    public function getOwningPlugin(): Plugin {
+        return $this->plugin;
     }
     
 }

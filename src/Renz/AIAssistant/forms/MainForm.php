@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Renz\AIAssistant\forms;
 
-use jojoe77777\FormAPI\SimpleForm;
-use jojoe77777\FormAPI\CustomForm;
+use Renz\AIAssistant\libs\FormAPI\SimpleForm;
+use Renz\AIAssistant\libs\FormAPI\CustomForm;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;
@@ -200,7 +200,7 @@ class MainForm {
         }
 
         // Create the chat form
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+        $form = new CustomForm(function(Player $player, ?array $data) {
             if ($data === null) {
                 // Form closed
                 return;
@@ -273,102 +273,125 @@ class MainForm {
     }
 
     /**
-     * Open the crafting form for a player
-     * 
-     * @param Player $player
-     */
+ * Open the crafting form for a player
+ * 
+ * @param Player $player
+ */
     private function openCraftingForm(Player $player): void {
-        // Check if token system is enabled and player has tokens
-        $tokenManager = $this->plugin->getTokenManager();
-        if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+    // Check if token system is enabled and player has tokens
+    $tokenManager = $this->plugin->getTokenManager();
+    if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+        $this->plugin->getMessageManager()->sendToastNotification(
+            $player,
+            "error",
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title"),
+            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body")
+        );
+        return;
+    }
+
+    // Create the crafting form
+    $form = new CustomForm(function(Player $player, ?array $data) {
+        if ($data === null) {
+            // Form closed
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.crafting_lookup_cancelled");
+            return;
+        }
+
+        // Get the item name from the form data
+        $itemName = trim($data[0] ?? "");
+        if (empty($itemName)) {
             $this->plugin->getMessageManager()->sendToastNotification(
                 $player,
                 "error",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.title"),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.presets.no_tokens.body")
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_title"),
+                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_body")
             );
             return;
         }
 
-        // Create the crafting form
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
-            if ($data === null) {
-                // Form closed
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.crafting_lookup_cancelled");
-                return;
-            }
+        // Check if token system is enabled and player has tokens
+        $tokenManager = $this->plugin->getTokenManager();
+        if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
+            $this->plugin->getMessageManager()->sendConfigurableMessage($player, "tokens.no_tokens_purchase");
+            return;
+        }
 
-            // Get the item name from the form data
-            $itemName = trim($data[0] ?? "");
-            if (empty($itemName)) {
-                $this->plugin->getMessageManager()->sendToastNotification(
-                    $player,
-                    "error",
-                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_title"),
-                    $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.no_item_body")
-                );
-                return;
-            }
+        // Construct the crafting query
+        $query = "How do I craft a {$itemName} in Minecraft? Please provide the exact recipe with ingredients and pattern.";
 
-            // Check if token system is enabled and player has tokens
-            $tokenManager = $this->plugin->getTokenManager();
-            if ($tokenManager->isEnabled() && !$tokenManager->canUseToken($player)) {
-                $this->plugin->getMessageManager()->sendConfigurableMessage($player, "tokens.no_tokens_purchase");
-                return;
-            }
+        // Set form context for the request
+        $requestManager = $this->plugin->getProviderManager()->getRequestManager();
+        $requestManager->setFormContext($player->getName(), [
+            'type' => 'crafting_form',
+            'item' => $itemName,
+            'question' => $query,
+            'tokenManager' => $tokenManager
+        ]);
 
-            // Construct the crafting query
-            $query = "How do I craft a {$itemName} in Minecraft? Please provide the exact recipe with ingredients and pattern.";
+        // --- SAFELY RESOLVE "looking up" TOAST (use notifications path + fallback) ---
+        $mm = $this->plugin->getMessageManager();
 
-            // Set form context for the request
-            $requestManager = $this->plugin->getProviderManager()->getRequestManager();
-            $requestManager->setFormContext($player->getName(), [
-                'type' => 'crafting_form',
-                'item' => $itemName,
-                'question' => $query,
-                'tokenManager' => $tokenManager
-            ]);
+        // Try preferred path first (matches your YAML: notifications.specific.looking_up)
+        $lookingUpTitle = $mm->getConfigurableMessage("notifications.specific.looking_up.title");
+        $lookingUpBody  = $mm->getConfigurableMessage("notifications.specific.looking_up.body", ["item" => $itemName]);
 
-            // Send looking up notification
-            $this->plugin->getMessageManager()->sendToastNotification(
-                $player,
-                "info",
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.title"),
-                $this->plugin->getMessageManager()->getConfigurableMessage("toasts.specific.looking_up.body", ["item" => $itemName])
-            );
+        // Fallbacks: older config might use toasts.specific.*
+        if (empty($lookingUpTitle)) {
+            $lookingUpTitle = $mm->getConfigurableMessage("toasts.specific.looking_up.title");
+        }
+        if (empty($lookingUpBody)) {
+            $lookingUpBody = $mm->getConfigurableMessage("toasts.specific.looking_up.body", ["item" => $itemName]);
+        }
 
-            // Process the query
-            try {
-                $this->plugin->getProviderManager()->processQuery($player, $query);
-            } catch (\Throwable $e) {
-                $this->plugin->getLogger()->error("Error in openCraftingForm for player " . $player->getName() . ": " . $e->getMessage());
-                $errorMessage = $this->getErrorMessage($e);
-                $player->sendMessage($errorMessage);
-            }
-        });
+        // Final fallback values to avoid undefined
+        if (empty($lookingUpTitle)) {
+            $lookingUpTitle = "§l§bLooking Up";
+        }
+        if (empty($lookingUpBody)) {
+            $lookingUpBody = "§fFinding crafting recipe for {$itemName}";
+        }
 
-        // Get form settings
-        $title = $this->plugin->getFormSetting("crafting_form.title", "Crafting Helper");
-        $content = $this->plugin->getFormSetting("crafting_form.content", "Enter the name of the item you want to craft:");
-        $placeholder = $this->plugin->getFormSetting("crafting_form.placeholder", "e.g., diamond sword, crafting table, etc.");
-
-        // Format title with proper colors
-        $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
-        $title = $this->plugin->formatFormText($titleFormat . $title);
-
-        $form->setTitle($title);
-        $form->addInput($content, $placeholder);
-        
-        $form->sendToPlayer($player);
-
-        // Send toast notification
+        // Send looking up notification
         $this->plugin->getMessageManager()->sendToastNotification(
             $player,
             "info",
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title"),
-            $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body")
+            $lookingUpTitle,
+            $lookingUpBody
         );
-    }
+
+        // Process the query
+        try {
+            $this->plugin->getProviderManager()->processQuery($player, $query);
+        } catch (\Throwable $e) {
+            $this->plugin->getLogger()->error("Error in openCraftingForm for player " . $player->getName() . ": " . $e->getMessage());
+            $errorMessage = $this->getErrorMessage($e);
+            $player->sendMessage($errorMessage);
+        }
+    });
+
+    // Get form settings
+    $title = $this->plugin->getFormSetting("crafting_form.title", "Crafting Helper");
+    $content = $this->plugin->getFormSetting("crafting_form.content", "Enter the name of the item you want to craft:");
+    $placeholder = $this->plugin->getFormSetting("crafting_form.placeholder", "e.g., diamond sword, crafting table, etc.");
+
+    // Format title with proper colors
+    $titleFormat = $this->plugin->getFormSetting("general.text_formatting.title", "&l&b");
+    $title = $this->plugin->formatFormText($titleFormat . $title);
+
+    $form->setTitle($title);
+    $form->addInput($content, $placeholder);
+    
+    $form->sendToPlayer($player);
+
+    // Send toast notification (welcome)
+    $this->plugin->getMessageManager()->sendToastNotification(
+        $player,
+        "info",
+        $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_title"),
+        $this->plugin->getMessageManager()->getConfigurableMessage("toasts.crafting.welcome_body")
+    );
+}
 
     /**
      * Open the building calculator form for a player
@@ -389,7 +412,7 @@ class MainForm {
         }
 
         // Create the building calculator form
-        $form = new \jojoe77777\FormAPI\CustomForm(function(Player $player, ?array $data) {
+        $form = new CustomForm(function(Player $player, ?array $data) {
             if ($data === null) {
                 // Form closed
                 $this->plugin->getMessageManager()->sendConfigurableMessage($player, "forms.building_calc_cancelled");

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Renz\AIAssistant\forms;
 
-use jojoe77777\FormAPI\SimpleForm;
+use Renz\AIAssistant\libs\FormAPI\SimpleForm;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat;
 use Renz\AIAssistant\Main;

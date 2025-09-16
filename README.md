@@ -171,3 +171,6 @@ This project is licensed under the [MIT License](LICENSE).
 - [PocketMine-MP](https://github.com/pmmp/PocketMine-MP) team for the amazing server software
 - [jojoe77777](https://github.com/jojoe77777) for the FormAPI plugin
 - All contributors and testers who helped improve this plugin
+- This work builds upon the concept introduced in the ChatPM-GPT project.
+I am grateful to the author for sharing their innovation and making this development possible.
+https://github.com/HBIDamian/ChatPM_GPT

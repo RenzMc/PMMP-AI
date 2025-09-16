@@ -107,19 +107,19 @@ class Main extends PluginBase implements Listener {
             $this->getLogger()->warning("CA certificate file not found");
         }
         
-        $this->getLogger()->info(TextFormat::WHITE . "AI Assistant plugin is loading...");
+        // Load FormAPI compatibility layer - must be included before any form usage
+        require_once __DIR__ . "/libs/FormAPI/FormAPI.php";
+        
+        if ($this->debug) {
+            $this->getLogger()->debug("AI Assistant plugin is loading...");
+        }
     }
 
     /**
      * Called when the plugin is enabled
      */
     protected function onEnable(): void {
-        // Check for FormAPI dependency
-        if (!$this->getServer()->getPluginManager()->getPlugin("FormAPI")) {
-            $this->getLogger()->error("FormAPI not found! Please install FormAPI by jojoe77777.");
-            $this->getServer()->getPluginManager()->disablePlugin($this);
-            return;
-        }
+        // FormAPI is now vendored - no external dependency needed
         
         // Initialize components
         $this->initializeComponents();
@@ -127,15 +127,17 @@ class Main extends PluginBase implements Listener {
         // Register events
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
         
-        // Register commands
-        $this->getServer()->getCommandMap()->register("aiassistant", new AICommand($this));
+        // Register commands with proper fallback prefix
+        $this->getServer()->getCommandMap()->register("pmmp-ai", new AICommand($this));
         
         // Schedule tasks
         $this->scheduleTasks();
         
-        // Log startup
-        $this->getLogger()->info(TextFormat::GREEN . "PMMP-AI Assistant enabled!");
-        $this->getLogger()->info(TextFormat::YELLOW . "Using " . $this->providerManager->getDefaultProvider() . " as the default AI provider");
+        // Log startup only if debug enabled
+        if ($this->debug) {
+            $this->getLogger()->debug("PMMP-AI Assistant enabled!");
+            $this->getLogger()->debug("Using " . $this->providerManager->getDefaultProvider() . " as the default AI provider");
+        }
     }
 
     /**
@@ -151,7 +153,9 @@ class Main extends PluginBase implements Listener {
             unset($this->_cainfo_resource);
         }
         
-        $this->getLogger()->info(TextFormat::RED . "AI Assistant plugin has been disabled!");
+        if ($this->debug) {
+            $this->getLogger()->debug("AI Assistant plugin has been disabled!");
+        }
     }
 
     /**

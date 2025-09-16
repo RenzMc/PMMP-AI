@@ -1,15 +1,20 @@
 name: PMMP-AI
 main: Renz\AIAssistant\Main
 version: 1.0.0
-api: 5.32.0
+api: 5.20.0
 author: Renz
-description: Advanced AI Assistant for Minecraft server with multi-provider API support, crafting help, building calculations, and more
+description: Advanced AI Assistant for Minecraft server...
 website: https://github.com/RenzMc/PMMP-AI
 
+softdepend:
+  - EconomyAPI
+  - BedrockEconomy
+  - CoinAPI
+
 permissions:
-  aiassistant.command.ai:
+  pmmp-ai.command.ai:
     description: "Allows the user to use the AI Assistant"
     default: true
-  aiassistant.admin:
+  pmmp-ai.admin:
     description: "Allows the user to access admin settings for the AI Assistant"
     default: op
